@@ -9,3 +9,5 @@ Task 2: complete (commits 9bd4400..e443b7d, review approved; minor optional bran
 Task 3: complete (commits e443b7d..b91d095, review approved after fix)
 Task 4: complete (storage layer and tests passed)
 Task 5: complete (rebuildable SQLite projection and tests passed)
+Task 6: complete (discovery gate, preregistration completeness, and supported metrics passed)
+Task 6: complete (discover gates and supported metrics passed)
