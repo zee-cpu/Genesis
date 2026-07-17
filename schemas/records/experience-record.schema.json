@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genesis.local/schemas/records/experience-record.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["id", "record_type", "schema_version", "policy_version", "created_at", "updated_at", "owner", "affected_business", "status", "evidence_references", "related_records", "privacy_classification", "immutable_history_refs", "timestamp", "business", "domain", "tags", "context", "hypothesis", "decision", "action", "outcome", "baseline", "expected_result", "metric_definition", "actual_result", "supporting_evidence", "contradicting_evidence", "confidence", "valid_from", "valid_until", "review_status", "related", "duplicate", "contradicts", "supersedes", "is_correction", "reflection", "reusable_lesson", "reuse_evidence"],
+  "properties": {
+    "id": { "$ref": "#/$defs/id" }, "record_type": { "const": "experience_record" },
+    "schema_version": { "$ref": "#/$defs/semver" }, "policy_version": { "const": "2.0.0" },
+    "created_at": { "$ref": "#/$defs/dateTime" }, "updated_at": { "$ref": "#/$defs/dateTime" },
+    "owner": { "$ref": "#/$defs/nonempty" }, "affected_business": { "$ref": "#/$defs/nonempty" },
+    "status": { "enum": ["draft", "active", "closed", "superseded"] },
+    "evidence_references": { "$ref": "#/$defs/nonemptyRefs" }, "related_records": { "$ref": "#/$defs/recordRefs" },
+    "privacy_classification": { "$ref": "#/$defs/privacy" }, "immutable_history_refs": { "$ref": "#/$defs/nonemptyRefs" },
+    "example_only": { "type": "boolean" }, "timestamp": { "$ref": "#/$defs/dateTime" }, "business": { "$ref": "#/$defs/nonempty" },
+    "domain": { "$ref": "#/$defs/nonempty" }, "tags": { "$ref": "#/$defs/nonemptyRefs" }, "context": { "$ref": "#/$defs/nonempty" },
+    "hypothesis": { "$ref": "#/$defs/nonempty" }, "decision": { "$ref": "#/$defs/nonempty" }, "action": { "$ref": "#/$defs/nonempty" },
+    "outcome": { "$ref": "#/$defs/nonempty" }, "baseline": { "$ref": "#/$defs/nonempty" }, "expected_result": { "$ref": "#/$defs/nonempty" },
+    "metric_definition": { "$ref": "#/$defs/nonempty" }, "actual_result": { "$ref": "#/$defs/nonempty" },
+    "supporting_evidence": { "$ref": "#/$defs/nonemptyRefs" }, "contradicting_evidence": { "$ref": "#/$defs/refs" },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 }, "valid_from": { "$ref": "#/$defs/dateTime" },
+    "valid_until": { "$ref": "#/$defs/dateTime" }, "review_status": { "enum": ["raw_event", "reviewed_experience", "validated_lesson", "principle"] },
+    "related": { "$ref": "#/$defs/recordRefs" }, "duplicate": { "$ref": "#/$defs/recordRefs" }, "contradicts": { "$ref": "#/$defs/recordRefs" },
+    "supersedes": { "$ref": "#/$defs/recordRefs" }, "is_correction": { "type": "boolean" },
+    "reflection": { "$ref": "#/$defs/nonempty" }, "reusable_lesson": { "$ref": "#/$defs/nonempty" }, "reuse_evidence": { "$ref": "#/$defs/refs" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "is_correction": { "const": true } }, "required": ["is_correction"] },
+      "then": { "properties": { "supersedes": { "type": "array", "minItems": 1 } } }
+    }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" }, "recordRef": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "semver": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }, "dateTime": { "type": "string", "format": "date-time" },
+    "nonempty": { "type": "string", "minLength": 1 }, "refs": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/nonempty" } },
+    "recordRefs": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/recordRef" } },
+    "nonemptyRefs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/nonempty" } },
+    "privacy": { "enum": ["public", "internal", "confidential", "restricted"] }
+  }
+}

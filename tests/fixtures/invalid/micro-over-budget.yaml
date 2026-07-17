@@ -1,0 +1,5 @@
+classes:
+  micro_experiment:
+    cash:
+      max_usd: 501
+      inclusive: true

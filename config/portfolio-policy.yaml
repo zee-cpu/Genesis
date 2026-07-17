@@ -1,0 +1,41 @@
+id: portfolio_policy
+policy_version: 2.0.0
+modes:
+  bootstrap:
+    allocations:
+      primary_opportunity: 0.80
+      experiments: 0.15
+      reserve: 0.05
+    active_business_opportunities: 1
+    system_meta_work_max_share: 0.10
+  operating:
+    allocations:
+      proven_businesses: 0.80
+      experiments: 0.15
+      learning_labs: 0.05
+proven_definition:
+  repeatable_demand_required: true
+  identified_customer_required: true
+  working_value_delivery_required: true
+  precommitted_economic_or_strategic_threshold_required: true
+automation:
+  minimum_repeated_material_manual_failures: 3
+internal_artifact_requirements:
+  - external_decision
+  - owner
+  - review_date
+  - sunset_date
+internal_artifacts_are_not_business_outcomes: true
+stop_without_external_decision_or_validated_need: true
+learning_lab:
+  required_fields:
+    - budget
+    - owner
+    - learning_metric
+    - monthly_review
+    - expiry
+  reserve_use_requires_real_failed_initiative: true
+aggregate_experiment_envelope:
+  human_approved_required: true
+  total_spend_enforced: true
+  individual_compliance_is_not_sufficient: true

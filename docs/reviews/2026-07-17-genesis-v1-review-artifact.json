@@ -1,0 +1,230 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "Historical Genesis Version 1.0 System Review",
+    "description": "Historical review of Genesis version 1.0; preserved as non-normative evidence of logical consistency, structural completeness, first-30-day feasibility, hidden risks, and constitutional safeguards.",
+    "generatedAt": "2026-07-17T12:00:00+04:00",
+    "blocks": [
+      {
+        "id": "title",
+        "type": "markdown",
+        "layout": "full",
+        "body": "# Historical Genesis Version 1.0 System Review"
+      },
+      {
+        "id": "executive_summary",
+        "type": "markdown",
+        "layout": "full",
+        "body": "## Executive Summary\n\n- **Genesis is a coherent philosophy, not yet an operating system.** It states useful values but rarely converts them into gates, permissions, owners, definitions, or auditable state transitions.\n- **The current configuration cannot enforce anything.** It is invalid YAML, omits controls present in the Constitution, and compresses lifecycle outcomes in ways that contradict the Constitution.\n- **The design will produce meta-work and an Experience Engine graveyard unless constrained.** Universal learning and recording duties create artifacts by default, while customer value, retrieval quality, and system-overhead limits have no operational thresholds.\n- **Human control is not explicitly enforced.** The CEO may be an agent, approvals are labels rather than authorization records, and no default-deny action policy prevents autonomous spending, deployment, external communication, contracts, or data handling.\n\n**Bottom line:** do not automate Genesis yet. First turn it into a small, manual, auditable operating protocol with one canonical schema, explicit human authority, measurable decision-quality criteria, and hard limits on internal system work."
+      },
+      {
+        "id": "finding_distribution_intro",
+        "type": "markdown",
+        "layout": "full",
+        "sourceId": "review_classification",
+        "body": "## The weaknesses are systemic, not isolated\n\nThe 20 findings are distributed across document consistency, missing operating machinery, likely first-month failures, hidden assumptions, and missing safeguards. Read the bars as a finding inventory, not a statistical severity model. The implication is that fixing a single component—such as memory or agent prompts—will not make Genesis operational; the governance, measurement, execution, and learning layers must be repaired together."
+      },
+      {
+        "id": "finding_distribution_chart",
+        "type": "chart",
+        "layout": "full",
+        "chartId": "findings_by_dimension"
+      },
+      {
+        "id": "logical_consistency",
+        "type": "markdown",
+        "layout": "full",
+        "body": "## The documents do not define one enforceable system\n\n### F1 — The configuration is not machine-usable\n\n**Issue:** The purported configuration is Markdown containing unindented keys and fenced fragments. A standard YAML parser fails at line 13. Even before the fence, `identity`, `constitution`, and `principles` do not form the intended hierarchy.\n\n**Evidence:** Configuration lines 3–13, 43–47, 64–78, and 98–112.\n\n**Recommendation:** Create `genesis.yaml` as valid YAML, validate it against a JSON Schema in CI, and make CI reject unknown keys, missing owners, missing thresholds, and contradictions with the Constitution. Keep explanatory prose in a separate Markdown document.\n\n### F2 — Experiment approval differs across documents\n\n**Issue:** The Constitution requires CEO approval for an Experiment, but the configuration records approval only for a Major Bet. This creates two incompatible policies.\n\n**Evidence:** Constitution lines 283–300; Configuration lines 70–78.\n\n**Recommendation:** Define one decision table with mutually exclusive classes, direct and aggregate cost limits, duration limits, risk classes, and required approvers. Generate human-readable policy from the validated configuration.\n\n### F3 — The configured lifecycle removes constitutional outcomes\n\n**Issue:** The Constitution permits Scale, Pivot, Learning Lab, Archive, or Kill; the configuration reduces the final stage to `scale_or_kill`. That removes three legitimate outcomes and conflicts with P6.\n\n**Evidence:** Constitution lines 108–119 and 349–357; Configuration lines 114–124.\n\n**Recommendation:** Use an explicit transition model with all allowed states, entry/exit criteria, accountable owner, review date, and terminal-state rules.\n\n### F4 — Append-only memory conflicts with correction unless there is a current-state layer\n\n**Issue:** P1 says every decision must remain open to correction, while the Experience Engine is append-only. Append-only history is useful, but without supersession semantics it preserves contradictions without telling operators what is currently believed.\n\n**Evidence:** Constitution lines 55–59; Configuration lines 98–112.\n\n**Recommendation:** Keep an immutable event log plus a versioned canonical view. Every correction must reference `supersedes`, preserve provenance, state why confidence changed, and update the current lesson without deleting history.\n\n### F5 — The instruction document may never be loaded\n\n**Issue:** The requested `codex.md` is actually named `codex.md.md`, its first heading says `CLAUDE.md`, and the repository contains no `AGENTS.md`. The standards are therefore content, not a reliably loaded control.\n\n**Evidence:** Agent Instructions lines 1–5 and the workspace filename.\n\n**Recommendation:** Put the instructions in the runtime-recognized agent instruction file, add a startup check that proves they were loaded, and version-pin the Constitution/configuration the agent must obey."
+      },
+      {
+        "id": "structural_completeness",
+        "type": "markdown",
+        "layout": "full",
+        "body": "## Critical operating machinery is missing\n\n### F6 — Roles have purposes but no interfaces or decision rights\n\n**Issue:** Five functions are named, but there is no RACI, handoff contract, queue, service level, conflict rule below the CEO, or state ownership. Agent prompts, tools, memory boundaries, and error recovery are absent.\n\n**Evidence:** Constitution lines 167–243; Configuration lines 43–62.\n\n**Recommendation:** For every lifecycle state, specify the accountable human, responsible function, required input artifact, allowed actions, output artifact, deadline, escalation path, and next-state gate.\n\n### F7 — “Evidence” and “better decisions” are undefined\n\n**Issue:** Evidence is supreme, but there is no evidence hierarchy, provenance rule, quality threshold, confidence score, base rate, counterevidence process, or independent review. Experiment #001 cannot prove improvement because “better” has no baseline or scoring rule.\n\n**Evidence:** Constitution lines 35–49 and 393–405; Agent Instructions lines 28–37 and 90–106.\n\n**Recommendation:** Adopt a decision record that includes prediction, probability/confidence, evidence links, disconfirming evidence, baseline, metric definition, measurement window, stop rule, and later calibration score. Compare decisions against a pre-Genesis baseline or a contemporaneous control.\n\n### F8 — Three incompatible record schemas fragment learning\n\n**Issue:** Experiments record belief/action/result/change; Experience Records use context/decision/action/outcome/reflection/principle; major engineering changes use context/reason/alternatives/expected outcome; failures use happened/why/changes. No stable identity connects them.\n\n**Evidence:** Constitution lines 63–74 and 247–264; Agent Instructions lines 65–74 and 110–123; Configuration lines 103–112.\n\n**Recommendation:** Define one canonical Decision–Experiment–Outcome schema with typed extensions. Require IDs, timestamps, owner, business/product, hypothesis, evidence references, metric definition, expected value, actual result, confidence, decision status, related records, and supersession fields.\n\n### F9 — Portfolio and financial governance are not operational\n\n**Issue:** The 80/15/5 allocation has no denominator, cadence, eligibility rule, or exception process. At inception there may be no “proven” opportunity. Cost caps omit labor, cumulative spend, concurrent experiments, taxes, refunds, and downside exposure. “Major Bet” has no threshold.\n\n**Evidence:** Constitution lines 268–300 and 361–367; Configuration lines 64–96.\n\n**Recommendation:** Define allocation over a named resource such as weekly person-hours and monthly deployable cash; define “proven”; add portfolio WIP limits, aggregate caps, runway protection, unit economics, and a numeric Major Bet threshold.\n\n### F10 — Trust, security, privacy, and compliance are slogans, not controls\n\n**Issue:** Trust prohibitions are valuable but incomplete. There is no consent policy, privacy classification, data retention/deletion, access control, threat model, incident response, backup/recovery, regulated-industry exclusion, contract authority, or legal review gate. “Consider security implications” is not a control.\n\n**Evidence:** Constitution lines 94–104 and 216–228; Agent Instructions lines 78–86 and 126–133.\n\n**Recommendation:** Add a risk register and mandatory action gates for personal data, payments, contracts, production deployment, security-sensitive changes, regulated claims, and customer experiments. Define minimum security and privacy controls before the first external user."
+      },
+      {
+        "id": "first_30_days",
+        "type": "markdown",
+        "layout": "full",
+        "body": "## What will fail in the first 30 days\n\n### F11 — The first mission cannot return a valid verdict\n\n**Issue:** “Better hypotheses, decisions, and learning” has no operational definition, comparator, sample size, or observation window. Genesis can declare success by producing more polished records.\n\n**Evidence:** Constitution lines 393–405.\n\n**Recommendation:** Pre-register a small scorecard: forecast calibration, decision cycle time, percentage of assumptions tested before build, avoidable rework, and realized value per experiment. Define the baseline and adjudicator before Experiment #001 starts.\n\n### F12 — Meta-work will crowd out customer work\n\n**Issue:** The documents require learning and records almost everywhere, while the anti-bureaucracy language is advisory. “Every action must produce understanding,” “all important decisions must be recorded,” and “every feature is an experiment” can justify endless frameworks, dashboards, retrospectives, and internal tooling.\n\n**Evidence:** Constitution lines 20–31, 63–74, and 247–264; Configuration lines 18–20; Agent Instructions lines 17–24, 65–74, and 90–106.\n\n**Recommendation:** Cap Genesis-system work at 10% of weekly capacity for the first month; require every internal task to name the external decision it unlocks, an owner, a deadline, and a deletion/sunset rule; prohibit new internal tooling until the same manual pain occurs at least three times.\n\n### F13 — Approval will be either a bottleneck or an illusion\n\n**Issue:** The CEO is the only named conflict resolver, resource allocator, constitutional protector, and major approver. Yet approvals have no request format, SLA, delegation, or authorization token. Work will stall, or agents will treat a checklist label as permission.\n\n**Evidence:** Constitution lines 171–182 and 283–300; Configuration lines 74–78.\n\n**Recommendation:** Define approval objects with approver identity, scope, amount, risk class, expiry, and evidence snapshot; set response SLAs and delegation limits; technically block protected actions without a valid approval.\n\n### F14 — The Experience Engine will accumulate faster than it can teach\n\n**Issue:** Append-only storage plus six broad fields creates an archive, not experience. There is no taxonomy, deduplication, contradiction handling, ranking, retrieval benchmark, curation owner, or usage feedback.\n\n**Evidence:** Constitution lines 247–264; Configuration lines 98–112.\n\n**Recommendation:** Do not build a general engine in month one. Keep a small reviewed register, run weekly synthesis, promote lessons only after evidence review, and test retrieval with a fixed set of real decision questions before adding semantic search or automation.\n\n### F15 — The product loop will jump from weak validation to building\n\n**Issue:** Validation says to test interest, willingness to pay, and urgency, but no evidence threshold is required before Build. The Builder merely asks whether a problem is validated; no gate blocks work.\n\n**Evidence:** Constitution lines 319–333; Agent Instructions lines 28–37.\n\n**Recommendation:** Require a signed validation artifact with precommitted pass/fail criteria appropriate to the market. The Builder should accept work only when the gate is valid or when a human explicitly approves a labeled learning prototype with a capped budget."
+      },
+      {
+        "id": "hidden_risks",
+        "type": "markdown",
+        "layout": "full",
+        "body": "## Hidden assumptions create dangerous failure modes\n\n### F16 — “Learning” is treated as inherently valuable\n\n**Issue:** Genesis assumes captured learning is reusable and economically valuable. In practice, lessons can be wrong, local, stale, trivial, or more expensive to retrieve than to rediscover. This makes failure easy to rationalize.\n\n**Evidence:** Constitution lines 63–82 and 108–119; Configuration lines 86–96.\n\n**Recommendation:** Value learning only when it changes a later decision, avoids measurable cost, or improves prediction. Track lesson reuse and invalidate or demote unused, contradicted, and stale principles.\n\n### F17 — AI-specific threats are absent\n\n**Issue:** The system assumes agents receive trustworthy context and execute faithfully. There are no controls for hallucination, prompt injection, poisoned evidence, tool misuse, data exfiltration, model drift, non-determinism, or compromised external content.\n\n**Evidence:** None of the three documents defines AI risk controls; the Agent Instructions security section is limited to four general prohibitions at lines 126–133.\n\n**Recommendation:** Add trust boundaries, provenance labels, sandboxed tools, least privilege, external-content isolation, high-risk output verification, model/version logging, deterministic checks where possible, and a human kill switch.\n\n### F18 — The system assumes one objective can resolve real tradeoffs\n\n**Issue:** Reality, learning, compounding, simplicity, trust, and revenue can conflict. “When unsure” ranks learning first, while the business goal is profitability. There is no rule for sacrificing speed, learning, optionality, or revenue when cash runway or customer harm is at stake.\n\n**Evidence:** Constitution lines 53–137; Agent Instructions lines 137–156.\n\n**Recommendation:** Define a precedence order: law/safety and explicit human constraints first, then customer trust, solvency, validated business value, learning, and optimization. Require escalation when principles conflict rather than letting an agent choose rhetorically."
+      },
+      {
+        "id": "missing_safeguards",
+        "type": "markdown",
+        "layout": "full",
+        "body": "## Missing safeguards allow authority and constitutional drift\n\n### F19 — Human approval is aspirational, not enforced\n\n**Issue:** The Constitution says humans and AI should improve each other, but it never identifies a mandatory human principal. The CEO appears under `initial_agents`; approval requirements are strings, not authenticated gates. Agents are not prevented from spending, deploying, contacting customers, entering contracts, processing personal data, or taking irreversible action.\n\n**Evidence:** Constitution lines 171–182, 283–300, and 409–413; Configuration lines 43–62 and 74–78.\n\n**Recommendation:** Declare the CEO or designated approver as a named human principal. Apply default-deny permissions and require attributable, scoped, expiring approval records for protected actions. Enforce these gates in tools and deployment systems, not only in prompts.\n\n### F20 — There is no constitutional change-control mechanism\n\n**Issue:** The CEO is told to protect the Constitution, but there is no normative precedence, amendment process, quorum, independent review, exception register, audit cadence, compatibility check, or rollback. The CEO also allocates resources and resolves conflicts, concentrating incentives and enforcement in one role.\n\n**Evidence:** Constitution lines 171–182; Configuration line 3 and lines 9–41; Agent Instructions lines 149–156.\n\n**Recommendation:** Define document precedence, amendment authority, required rationale and evidence, human sign-off, cooling-off period for high-impact changes, machine-checked compatibility, immutable change history, exception expiry, periodic independent audit, and rollback to the last valid policy set."
+      },
+      {
+        "id": "explicit_questions",
+        "type": "markdown",
+        "layout": "full",
+        "body": "## Direct answers to the three control questions\n\n### How does Genesis prevent itself from becoming a meta-work generator?\n\n**It currently does not.** It has intent statements against unnecessary systems, but no capacity cap, WIP limit, customer-contact minimum, artifact budget, overhead metric, or sunset rule. Worse, universal learning and recording duties positively incentivize meta-work. Add a system-overhead ratio, a hard monthly cap, a three-recurrence rule before automation, and a requirement that every internal artifact identify the external decision it changes.\n\n### What stops the Experience Engine from becoming an unsearchable graveyard?\n\n**Nothing in the current design.** Required fields and append-only storage address capture, not retrieval or truth maintenance. Add stable IDs, typed taxonomy, timestamps, owners, products/domains, evidence links, confidence, validity windows, relationships, `supersedes`, deduplication, curation, and retrieval-quality tests. Separate raw immutable events from curated current lessons. Do not promote an “extracted principle” from a single event without review.\n\n### Where is the human-in-the-loop requirement explicitly enforced?\n\n**Nowhere.** The final statement says humans and AI improve each other, and some bets require CEO approval, but the CEO is listed under `initial_agents` and no document declares the CEO human. There is no default-deny permission model or technical approval gate. Define a human principal explicitly and require cryptographically/auditably attributable approval for spending, contracts, production changes, external communications, personal data, regulated activity, irreversible actions, and any constitutional exception."
+      },
+      {
+        "id": "recommendations",
+        "type": "markdown",
+        "layout": "full",
+        "body": "## Fix the control plane before building the engine\n\n1. **Make policy executable.** Produce valid `genesis.yaml`, a schema, CI validation, precedence rules, and the correctly named runtime instruction file.\n2. **Declare human authority.** Add a default-deny action matrix, approval records, delegation, separation of duties, audit logs, and emergency stop/revocation.\n3. **Unify the operating record.** Replace the four partial schemas with one versioned Decision–Experiment–Outcome model and an immutable-history/current-belief split.\n4. **Make experiments falsifiable.** Require baselines, metric definitions, evidence provenance, counterevidence, decision windows, stop conditions, and aggregate budgets.\n5. **Constrain meta-work.** Limit internal system work, cap WIP, tie every artifact to an external decision, and delete or sunset unused mechanisms.\n6. **Run one manual business loop.** Use one opportunity, one accountable human, one pre-registered validation plan, and no automation. Observe where the protocol actually fails.\n7. **Earn the Experience Engine.** After enough real records exist, test keyword retrieval and weekly curation first. Add more sophisticated search only when benchmarked retrieval failures justify it.\n8. **Install risk gates before customers.** Cover privacy, security, legal authority, contracts, payments, incident response, customer experimentation, and AI-specific threats."
+      },
+      {
+        "id": "further_questions",
+        "type": "markdown",
+        "layout": "full",
+        "body": "## Decisions still required\n\n- Is the CEO necessarily a named human, and which actions can agents take without prior approval?\n- What is the first target market, and which legal, financial, privacy, and safety constraints apply to it?\n- What resource does 80/15/5 allocate, and how can “proven” exist before the first business is proven?\n- What measurable baseline will Experiment #001 beat, and who adjudicates the result?\n- Which document is normative when the Constitution, configuration, and agent instructions disagree?"
+      },
+      {
+        "id": "caveats",
+        "type": "markdown",
+        "layout": "full",
+        "body": "## Caveats and scope\n\nThis review assesses only the three supplied workspace documents as of July 17, 2026. No implementation, runtime permission system, database schema, legal policy, financial model, or prior experiment evidence was supplied. A control absent from these documents may exist elsewhere, but Genesis cannot rely on an undisclosed control as part of its operating design."
+      }
+    ],
+    "sources": [
+      {
+        "id": "constitution",
+        "label": "Genesis Constitution",
+        "path": "Genesis.md",
+        "description": "Core purpose, constitutional principles, operating loop, organization, Experience Engine, decision rules, product lifecycle, resource allocation, and first mission."
+      },
+      {
+        "id": "configuration",
+        "label": "Genesis Configuration",
+        "path": "Genesis Configuration.md",
+        "description": "YAML-like structured specification for principles, agents, decisions, resource allocation, learning labs, Experience Engine, product lifecycle, and automation."
+      },
+      {
+        "id": "agent_instructions",
+        "label": "Genesis Engineering Agent Instructions",
+        "path": "codex.md.md",
+        "description": "Builder-agent prime directive, architecture rules, data rules, experiment mindset, security rules, and business awareness."
+      },
+      {
+        "id": "review_classification",
+        "label": "Genesis review finding classification",
+        "path": "2026-07-17-genesis-v1-review-artifact.json",
+        "description": "Manual classification of findings F1–F20 into five mutually exclusive review dimensions.",
+        "query": {
+          "language": "sql",
+          "engine": "PostgreSQL-compatible",
+          "description": "Materialize the reviewed finding counts by dimension for the report chart.",
+          "sql": "SELECT dimension, finding_count, share_of_findings, finding_ids FROM (VALUES ('Logical consistency', 5, 0.25, 'F1–F5'), ('Structural completeness', 5, 0.25, 'F6–F10'), ('First-30-day feasibility', 5, 0.25, 'F11–F15'), ('Hidden risks', 3, 0.15, 'F16–F18'), ('Missing safeguards', 2, 0.10, 'F19–F20')) AS reviewed_findings(dimension, finding_count, share_of_findings, finding_ids);"
+        }
+      }
+    ],
+    "cards": [],
+    "charts": [
+      {
+        "id": "findings_by_dimension",
+        "title": "Findings by review dimension",
+        "subtitle": "Manual classification of 20 document-backed findings; counts are not weighted by severity",
+        "type": "horizontalBar",
+        "intent": "comparison",
+        "question": "Which review dimensions contain the most identified design problems?",
+        "rationale": "A horizontal bar chart makes the four category counts easy to compare while accommodating their long labels.",
+        "dataset": "findings_by_dimension",
+        "encodings": {
+          "x": {
+            "field": "dimension"
+          },
+          "y": {
+            "field": "finding_count"
+          }
+        },
+        "comparisonContext": {
+          "denominator": "20 findings",
+          "grain": "review dimension",
+          "unit": "findings"
+        },
+        "palette": {
+          "kind": "sequential",
+          "name": "blue"
+        },
+        "labels": {
+          "values": "all"
+        },
+        "sourceId": "review_classification"
+      }
+    ],
+    "tables": []
+  },
+  "snapshot": {
+    "version": 1,
+    "status": "ready",
+    "generatedAt": "2026-07-17T12:00:00+04:00",
+    "datasets": {
+      "findings_by_dimension": [
+        {
+          "dimension": "Logical consistency",
+          "finding_count": 5,
+          "share_of_findings": 0.25,
+          "finding_ids": "F1–F5"
+        },
+        {
+          "dimension": "Structural completeness",
+          "finding_count": 5,
+          "share_of_findings": 0.25,
+          "finding_ids": "F6–F10"
+        },
+        {
+          "dimension": "First-30-day feasibility",
+          "finding_count": 5,
+          "share_of_findings": 0.25,
+          "finding_ids": "F11–F15"
+        },
+        {
+          "dimension": "Hidden risks",
+          "finding_count": 3,
+          "share_of_findings": 0.15,
+          "finding_ids": "F16–F18"
+        },
+        {
+          "dimension": "Missing safeguards",
+          "finding_count": 2,
+          "share_of_findings": 0.10,
+          "finding_ids": "F19–F20"
+        }
+      ]
+    },
+    "accessIssues": []
+  },
+  "sources": [
+    {
+      "id": "constitution",
+      "label": "Genesis Constitution",
+      "path": "Genesis.md",
+      "description": "Core purpose, constitutional principles, operating loop, organization, Experience Engine, decision rules, product lifecycle, resource allocation, and first mission."
+    },
+    {
+      "id": "configuration",
+      "label": "Genesis Configuration",
+      "path": "Genesis Configuration.md",
+      "description": "YAML-like structured specification for principles, agents, decisions, resource allocation, learning labs, Experience Engine, product lifecycle, and automation."
+    },
+    {
+      "id": "agent_instructions",
+      "label": "Genesis Engineering Agent Instructions",
+      "path": "codex.md.md",
+      "description": "Builder-agent prime directive, architecture rules, data rules, experiment mindset, security rules, and business awareness."
+    },
+    {
+      "id": "review_classification",
+      "label": "Genesis review finding classification",
+      "path": "2026-07-17-genesis-v1-review-artifact.json",
+      "description": "Manual classification of findings F1–F20 into five mutually exclusive review dimensions.",
+      "query": {
+        "language": "sql",
+        "engine": "PostgreSQL-compatible",
+        "description": "Materialize the reviewed finding counts by dimension for the report chart.",
+        "sql": "SELECT dimension, finding_count, share_of_findings, finding_ids FROM (VALUES ('Logical consistency', 5, 0.25, 'F1–F5'), ('Structural completeness', 5, 0.25, 'F6–F10'), ('First-30-day feasibility', 5, 0.25, 'F11–F15'), ('Hidden risks', 3, 0.15, 'F16–F18'), ('Missing safeguards', 2, 0.10, 'F19–F20')) AS reviewed_findings(dimension, finding_count, share_of_findings, finding_ids);"
+      }
+    }
+  ]
+}

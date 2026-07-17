@@ -1,0 +1,77 @@
+id: experience_policy
+policy_version: 2.0.0
+promotion_order: [raw_event, reviewed_experience, validated_lesson, principle]
+immutable_evidence:
+  append_only: true
+  stored_record_types: [decision_record, experiment_record, approval_record, experience_record, constitutional_amendment]
+  silent_rewrite_forbidden: true
+  corrections:
+    create_new_record: true
+    require_supersedes: true
+    preserve_prior_record: true
+curated_knowledge:
+  owner_role: analyst
+  human_curation_cadence: weekly
+  link_supporting_evidence: true
+  link_contradicting_evidence: true
+  confidence_required: true
+  validity_window_required: true
+  supersedes_required_for_replacement: true
+  current_belief_projection: true
+promotion:
+  reviewed_experience:
+    human_review_required: true
+    evidence_provenance_required: true
+  validated_lesson:
+    outcome_evidence_required: true
+    counterevidence_review_required: true
+    reuse_scope_required: true
+  principle:
+    replicated_evidence_or_human_approval_required: true
+    explicit_human_approver: human_authority
+    single_event_auto_promotion_forbidden: true
+    evidence_quality_limitations_preserved: true
+    human_approval_does_not_upgrade_evidence_quality: true
+required_fields:
+  - id
+  - timestamp
+  - owner
+  - business
+  - domain
+  - tags
+  - context
+  - hypothesis
+  - decision
+  - action
+  - outcome
+  - baseline
+  - expected_result
+  - metric_definition
+  - actual_result
+  - supporting_evidence
+  - contradicting_evidence
+  - confidence
+  - validity_window
+  - privacy_classification
+  - review_status
+  - related
+  - duplicate
+  - contradicts
+  - supersedes
+  - reflection
+  - reusable_lesson
+  - reuse_evidence
+initial_store:
+  format: reviewed_yaml_record_collection
+  database_required: false
+retrieval:
+  methods: [keyword_search, field_search, weekly_human_curated_synthesis]
+  benchmarks_required: true
+automation_exclusions: [vector_search, automated_extraction, autonomous_principle_promotion]
+quality_metrics:
+  - experience_retrieval_success
+  - contradiction_resolution_time
+  - lesson_reuse_rate
+  - changed_decisions
+  - stale_record_rate
+  - avoided_cost_or_rework

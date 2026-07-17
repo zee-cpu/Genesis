@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genesis.local/schemas/risk-policy.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "policy_version", "levels", "unresolved_material_uncertainty", "control_domains", "consequential_ai"],
+  "properties": {
+    "id": { "const": "risk_policy" },
+    "policy_version": { "$ref": "#/$defs/semver" },
+    "levels": {
+      "type": "array", "minItems": 4, "maxItems": 4, "items": { "$ref": "#/$defs/riskLevel" }
+    },
+    "unresolved_material_uncertainty": {
+      "type": "object", "additionalProperties": false,
+      "required": ["domains", "minimum_level_increase", "suspension_may_be_required"],
+      "properties": {
+        "domains": { "const": ["legal", "privacy", "security", "financial", "customer_harm"] },
+        "minimum_level_increase": { "type": "integer", "minimum": 1 },
+        "suspension_may_be_required": { "const": true }
+      }
+    },
+    "control_domains": {
+      "type": "array", "minItems": 8, "maxItems": 8, "uniqueItems": true,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["id", "requirements"],
+        "properties": {
+          "id": { "enum": ["legal_and_contractual", "privacy", "secrets_and_access", "production", "financial", "customer_experiments", "regulated_activity", "ai"] },
+          "requirements": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/identifier" } }
+        }
+      }
+    },
+    "consequential_ai": {
+      "type": "object", "additionalProperties": false,
+      "required": ["required_context", "reviewer_role", "human_accountability_preserved", "unverified_action_forbidden"],
+      "properties": {
+        "required_context": { "const": ["model_identity", "model_version", "material_tool_context", "evidence_sources", "reviewer", "verification_outcome"] },
+        "reviewer_role": { "$ref": "#/$defs/identifier" },
+        "human_accountability_preserved": { "const": true },
+        "unverified_action_forbidden": { "const": true }
+      }
+    }
+  },
+  "$defs": {
+    "semver": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "identifier": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "riskLevel": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "protected_action", "required_approver"],
+      "properties": {
+        "id": { "enum": ["low", "medium", "high", "critical"] },
+        "protected_action": { "type": "boolean" },
+        "required_approver": { "enum": ["role_permission", "ceo", "human_authority"] }
+      }
+    }
+  }
+}

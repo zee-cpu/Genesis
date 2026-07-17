@@ -1,0 +1,101 @@
+id: permissions
+policy_version: 2.0.0
+default_deny: true
+permission_requirements:
+  - valid_effective_policy
+  - authorized_role_and_permission
+  - unexpired_budget_duration_data_and_risk_envelope
+  - valid_required_approvals
+  - no_applicable_suspension_or_revocation
+  - required_evidence_and_records
+low_risk_permissions:
+  - id: public_source_research
+    description: Research public sources without collecting sensitive data.
+    allowed_roles: [research, analyst]
+    constraints: [reversible, internal_only, public_data_only, within_approved_envelope]
+  - id: internal_drafting
+    description: Prepare internal drafts that do not create external commitments.
+    allowed_roles: [ceo, research, builder, operator, analyst]
+    constraints: [reversible, internal_only, no_external_send, within_approved_envelope]
+  - id: sandboxed_code_change
+    description: Make and test code changes outside production systems.
+    allowed_roles: [builder]
+    constraints: [reversible, sandbox_only, no_production_access, within_approved_envelope]
+  - id: internal_analysis
+    description: Analyze approved internal evidence and metrics.
+    allowed_roles: [ceo, research, analyst]
+    constraints: [reversible, internal_only, approved_data_only, within_approved_envelope]
+  - id: record_preparation
+    description: Prepare policy-required records without granting approval.
+    allowed_roles: [ceo, research, builder, operator, analyst]
+    constraints: [reversible, internal_only, approval_not_inferred, within_approved_envelope]
+protected_actions:
+  - id: legal_commitment
+    description: Contracts, terms, warranties, or other legal commitments.
+    risk_floor: high
+    required_approver: human_authority
+  - id: outside_portfolio_spend
+    description: Spending outside an approved portfolio envelope.
+    risk_floor: high
+    required_approver: human_authority
+  - id: financial_authority
+    description: Banking authority, payments, refunds, transfers, or financial-authority changes.
+    risk_floor: high
+    required_approver: human_authority
+  - id: production_change
+    description: Production deployment or an irreversible production change.
+    risk_floor: high
+    required_approver: human_authority
+  - id: sensitive_data
+    description: Collection, purchase, sharing, or processing of personal or sensitive data.
+    risk_floor: high
+    required_approver: human_authority
+  - id: external_communication
+    description: External customer communication outside an approved template and audience.
+    risk_floor: medium
+    required_approver: human_authority
+  - id: regulated_activity
+    description: Regulated-market activity or regulated claims.
+    risk_floor: high
+    required_approver: human_authority
+  - id: security_or_access_change
+    description: Security exceptions, credential access, permission escalation, or access-control changes.
+    risk_floor: high
+    required_approver: human_authority
+  - id: public_representation
+    description: Public claims or representations made on behalf of Genesis.
+    risk_floor: high
+    required_approver: human_authority
+  - id: legal_entity_change
+    description: Creation or dissolution of a legal entity.
+    risk_floor: critical
+    required_approver: human_authority
+  - id: constitutional_change
+    description: Constitutional amendments or policy exceptions.
+    risk_floor: critical
+    required_approver: human_authority
+  - id: high_or_critical_risk
+    description: Any action classified as high or critical risk.
+    risk_floor: high
+    required_approver: human_authority
+approval_validity:
+  required_checks:
+    - scope
+    - actor
+    - budget
+    - duration
+    - data_class
+    - risk_class
+    - effective_time
+    - expiry
+    - revocation
+  deny_if:
+    - missing
+    - expired
+    - revoked
+    - mismatched
+    - ambiguous
+human_approval:
+  principal_id: genesis-owner
+  explicit_record_required: true
+  inference_forbidden: true

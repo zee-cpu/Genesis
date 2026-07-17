@@ -1,0 +1,33 @@
+$schema: ./schemas/genesis.schema.json
+version: 2.0.0
+schema_version: 1.0.0
+authority: normative
+effective_date: 2026-07-17
+human_authority_principal_id: genesis-owner
+policies:
+  - { id: governance, path: config/governance.yaml, schema: schemas/governance.schema.json }
+  - { id: organization, path: config/organization.yaml, schema: schemas/organization.schema.json }
+  - { id: permissions, path: config/permissions.yaml, schema: schemas/permissions.schema.json }
+  - { id: decision_policy, path: config/decision-policy.yaml, schema: schemas/decision-policy.schema.json }
+  - { id: portfolio_policy, path: config/portfolio-policy.yaml, schema: schemas/portfolio-policy.schema.json }
+  - { id: business_lifecycle, path: config/workflows/business-lifecycle.yaml, schema: schemas/workflow.schema.json }
+  - { id: experiment_lifecycle, path: config/workflows/experiment-lifecycle.yaml, schema: schemas/workflow.schema.json }
+  - { id: experience_policy, path: config/experience-policy.yaml, schema: schemas/experience-policy.schema.json }
+  - { id: risk_policy, path: config/risk-policy.yaml, schema: schemas/risk-policy.schema.json }
+  - { id: metrics_policy, path: config/metrics-policy.yaml, schema: schemas/metrics-policy.schema.json }
+record_templates:
+  - { id: approval_record, path: templates/approval-record.yaml, schema: schemas/records/approval-record.schema.json }
+  - { id: decision_record, path: templates/decision-record.yaml, schema: schemas/records/decision-record.schema.json }
+  - { id: experiment_record, path: templates/experiment-record.yaml, schema: schemas/records/experiment-record.schema.json }
+  - { id: experience_record, path: templates/experience-record.yaml, schema: schemas/records/experience-record.schema.json }
+  - { id: constitutional_amendment, path: templates/constitutional-amendment.yaml, schema: schemas/records/constitutional-amendment.schema.json }
+documents:
+  - { id: constitution, path: Genesis.md, authority: explanatory, required_policy_version: 2.0.0 }
+  - { id: configuration_guide, path: Genesis Configuration.md, authority: explanatory, required_policy_version: 2.0.0 }
+  - { id: agent_instructions, path: AGENTS.md, authority: explanatory, required_policy_version: 2.0.0 }
+validation:
+  fail_closed: true
+  reject_duplicate_yaml_keys: true
+  reject_unknown_schema_properties: true
+  require_all_references: true
+  require_document_version_markers: true

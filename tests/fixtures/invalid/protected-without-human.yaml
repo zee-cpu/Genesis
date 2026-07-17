@@ -1,0 +1,3 @@
+protected_actions:
+  - id: legal_commitment
+    required_approver: ceo

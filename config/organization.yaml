@@ -1,0 +1,72 @@
+id: organization
+policy_version: 2.0.0
+roles:
+  - id: human_authority
+    principal_type: human
+    reports_to: null
+    escalates_to: null
+    accountabilities:
+      - final_authority
+      - constitutional_governance
+      - protected_action_approval
+      - emergency_control
+  - id: ceo
+    principal_type: human_or_agent
+    reports_to: human_authority
+    escalates_to: human_authority
+    accountabilities:
+      - strategic_direction
+      - resource_allocation_within_envelopes
+      - experiment_approval
+      - operational_conflict_resolution
+      - policy_enforcement
+      - material_risk_reporting
+  - id: research
+    principal_type: human_or_agent
+    reports_to: ceo
+    escalates_to: ceo
+    accountabilities:
+      - opportunity_discovery
+      - public_source_research
+      - customer_discovery_design
+      - experiment_design
+      - hypothesis_creation
+  - id: builder
+    principal_type: human_or_agent
+    reports_to: ceo
+    escalates_to: ceo
+    accountabilities:
+      - sandboxed_implementation
+      - testing
+      - technical_documentation
+      - security_review
+  - id: operator
+    principal_type: human_or_agent
+    reports_to: ceo
+    escalates_to: ceo
+    accountabilities:
+      - approved_business_operations
+      - customer_support
+      - billing_preparation
+      - compliance_execution
+  - id: analyst
+    principal_type: human_or_agent
+    reports_to: ceo
+    escalates_to: ceo
+    accountabilities:
+      - measurement
+      - evidence_quality
+      - decision_analysis
+      - experience_curation
+separation_of_duties:
+  proposer_must_differ_from_approver: true
+  action_classes:
+    - major_bet
+    - protected_action
+    - permission_escalation
+    - constitutional_action
+escalation:
+  ambiguity_target: human_authority
+  policy_conflict_target: human_authority
+  material_risk_target: ceo
+  protected_action_target: human_authority

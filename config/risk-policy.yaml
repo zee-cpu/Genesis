@@ -1,0 +1,33 @@
+id: risk_policy
+policy_version: 2.0.0
+levels:
+  - { id: low, protected_action: false, required_approver: role_permission }
+  - { id: medium, protected_action: false, required_approver: ceo }
+  - { id: high, protected_action: true, required_approver: human_authority }
+  - { id: critical, protected_action: true, required_approver: human_authority }
+unresolved_material_uncertainty:
+  domains: [legal, privacy, security, financial, customer_harm]
+  minimum_level_increase: 1
+  suspension_may_be_required: true
+control_domains:
+  - id: legal_and_contractual
+    requirements: [verified_authority, contract_review, claims_review, approval_record]
+  - id: privacy
+    requirements: [classification, collection_minimization, consent, retention, access, deletion, breach_handling]
+  - id: secrets_and_access
+    requirements: [credential_protection, least_privilege, access_review, revocation]
+  - id: production
+    requirements: [change_review, backup, rollback, recovery, incident_response]
+  - id: financial
+    requirements: [payment_control, refund_control, accounting_evidence, financial_authority, runway_protection]
+  - id: customer_experiments
+    requirements: [consent, harm_limits, complaint_handling, termination]
+  - id: regulated_activity
+    requirements: [jurisdiction_review, authorization, claims_control, human_approval]
+  - id: ai
+    requirements: [hallucination_check, prompt_injection_defense, poisoned_evidence_review, nondeterminism_control, model_drift_review, tool_scope_control, data_exfiltration_control]
+consequential_ai:
+  required_context: [model_identity, model_version, material_tool_context, evidence_sources, reviewer, verification_outcome]
+  reviewer_role: analyst
+  human_accountability_preserved: true
+  unverified_action_forbidden: true

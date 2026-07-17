@@ -1,0 +1,49 @@
+id: approval-github-publication-2026-07-17
+record_type: approval_record
+schema_version: 1.0.0
+policy_version: 2.0.0
+created_at: 2026-07-17T17:48:21Z
+updated_at: 2026-07-17T17:48:21Z
+owner: human_authority
+affected_business: genesis-system
+status: active
+evidence_references:
+  - conversation://current/genesis-owner/github-publication-approval
+  - command://npm-run-check/2026-07-17/pass
+related_records: []
+privacy_classification: public
+immutable_history_refs:
+  - record://approval-github-publication-2026-07-17/v1
+approver_role: human_authority
+approver_principal_id: genesis-owner
+requester: codex-agent
+actor: codex-agent
+action_class: protected_action
+scope:
+  actions:
+    - github_publication:https://github.com/zee-cpu/Genesis
+  wildcard: false
+evidence_snapshot:
+  - model-identity://openai/codex
+  - model-version://gpt-5
+  - tool-context://git-gh-npm
+  - evidence://repository-scope/2026-07-17
+  - reviewer://genesis-owner/analyst
+  - verification://npm-run-check/pass
+limits:
+  cash_usd: 0
+  labor_hours: 2
+  duration_days: 1
+  data_classes: [public]
+  risk_level: high
+decision: approved
+rationale: >-
+  genesis-owner explicitly approved codex-agent to publish the current Genesis 2.0
+  repository to https://github.com/zee-cpu/Genesis, acting as analyst reviewer
+  after reviewing the repository scope and passing npm run check results.
+issued_at: 2026-07-17T17:48:21Z
+effective_at: 2026-07-17T17:48:21Z
+expires_at: 2026-07-18T17:48:21Z
+review_at: 2026-07-17T17:48:21Z
+revoked: false
+revocation_reference: null

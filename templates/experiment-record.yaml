@@ -1,0 +1,47 @@
+id: example-experiment-001
+record_type: experiment_record
+schema_version: 1.0.0
+policy_version: 2.0.0
+created_at: 2026-07-17T10:00:00Z
+updated_at: 2026-07-24T10:00:00Z
+owner: research
+affected_business: example-business
+status: closed
+evidence_references: [evidence://example/experiment-results]
+related_records: [example-decision-001, example-experience-001]
+privacy_classification: internal
+immutable_history_refs: [history://example/experiment-001/v1]
+example_only: true
+problem: Determine whether the example task and prototype create observable customer value.
+supported_decision: example-decision-001
+hypothesis: Qualified participants will complete the task unaided.
+confidence: 0.55
+evidence: [evidence://example/customer-interviews]
+counterevidence: [evidence://example/customer-objection]
+baseline: zero_participants_have_used_the_prototype
+comparison_method: compare_completion_against_preregistered_threshold
+metric:
+  formula: qualified_participants_completing_task_divided_by_qualified_participants
+  population: qualified_participants
+  denominator: qualified_participants
+  data_source: observed_session_log
+expected_outcome: At least three of five qualified participants complete the task.
+minimum_meaningful_effect: completion_ratio_at_least_0_60
+failure_conditions: [fewer_than_three_completions]
+stop_conditions: [participant_harm, privacy_incident, budget_exhausted]
+limits:
+  cash_usd: 0
+  labor_hours: 24
+  duration_days: 7
+  data_classes: [internal]
+  risk_level: low
+decision_date: 2026-07-24T10:00:00Z
+allowed_outcomes: [scale, pivot, learning_lab, archive, kill]
+approval_references: [example-approval-001]
+actual_cost:
+  cash_usd: 0
+  labor_hours: 20
+results: Three of five qualified participants completed the task unaided.
+reflection: The threshold passed narrowly; counterevidence remains material.
+outcome: pivot
+experience_reference: example-experience-001

@@ -1,0 +1,119 @@
+id: experiment_lifecycle
+policy_version: 2.0.0
+initial_state: draft
+terminal_states: [closed]
+preregistration_required_fields:
+  - problem
+  - supported_decision
+  - hypothesis
+  - confidence
+  - evidence
+  - counterevidence
+  - baseline
+  - comparison_method
+  - metric_formula
+  - metric_population
+  - metric_denominator
+  - metric_data_source
+  - expected_outcome
+  - minimum_meaningful_effect
+  - failure_conditions
+  - stop_conditions
+  - maximum_cash
+  - maximum_labor
+  - maximum_duration
+  - maximum_data
+  - maximum_risk
+  - owner
+  - decision_date
+  - allowed_outcomes
+closure_required_fields: [actual_cost, outcome, reflection, confidence_update, decision_outcome, linked_experience_record]
+states:
+  - id: draft
+    accountable_role: ceo
+    responsible_role: research
+    required_inputs: [decision_record]
+    allowed_actions: [draft_preregistration]
+    exit_criteria: [draft_complete]
+    required_evidence: [problem, hypothesis, proposed_metric]
+    approval_class: micro_experiment
+    output_record: experiment_record
+    review_deadline_days: 7
+    next_states: [evidence_review]
+  - id: evidence_review
+    accountable_role: ceo
+    responsible_role: analyst
+    required_inputs: [experiment_record]
+    allowed_actions: [review_evidence, review_counterevidence, check_metric_definition]
+    exit_criteria: [preregistration_reviewed]
+    required_evidence: [evidence, counterevidence, baseline]
+    approval_class: experiment
+    output_record: experiment_record
+    review_deadline_days: 7
+    next_states: [approval, draft]
+  - id: approval
+    accountable_role: ceo
+    responsible_role: research
+    required_inputs: [experiment_record]
+    allowed_actions: [approve_within_envelope, escalate_protected_action]
+    exit_criteria: [valid_approval, complete_preregistration]
+    required_evidence: [preregistration, approved_envelope]
+    approval_class: experiment
+    output_record: approval_record
+    review_deadline_days: 7
+    next_states: [running, draft]
+  - id: running
+    accountable_role: ceo
+    responsible_role: research
+    required_inputs: [experiment_record, approval_record]
+    allowed_actions: [execute_preregistered_experiment, stop_on_condition]
+    exit_criteria: [completed_or_stopped]
+    required_evidence: [execution_log, deviations, actual_exposure]
+    approval_class: experiment
+    output_record: experiment_record
+    review_deadline_days: 30
+    next_states: [measurement]
+  - id: measurement
+    accountable_role: ceo
+    responsible_role: analyst
+    required_inputs: [experiment_record]
+    allowed_actions: [calculate_metric, compare_baseline]
+    exit_criteria: [outcome_measured]
+    required_evidence: [actual_result, comparison, data_quality]
+    approval_class: routine
+    output_record: experiment_record
+    review_deadline_days: 7
+    next_states: [reflection]
+  - id: reflection
+    accountable_role: ceo
+    responsible_role: analyst
+    required_inputs: [experiment_record]
+    allowed_actions: [reflect, update_confidence, draft_experience]
+    exit_criteria: [reflection_complete]
+    required_evidence: [actual_cost, outcome, reflection, confidence_update]
+    approval_class: routine
+    output_record: experience_record
+    review_deadline_days: 7
+    next_states: [decision]
+  - id: decision
+    accountable_role: ceo
+    responsible_role: analyst
+    required_inputs: [experiment_record, experience_record]
+    allowed_actions: [recommend_scale_pivot_learning_lab_archive_or_kill]
+    exit_criteria: [allowed_outcome_selected]
+    required_evidence: [decision_outcome, decision_rationale]
+    approval_class: major_bet
+    output_record: decision_record
+    review_deadline_days: 7
+    next_states: [closed]
+  - id: closed
+    accountable_role: ceo
+    responsible_role: analyst
+    required_inputs: [experiment_record, decision_record, experience_record]
+    allowed_actions: [close_and_preserve_records]
+    exit_criteria: [closure_fields_complete]
+    required_evidence: [actual_cost, outcome, reflection, confidence_update, decision_outcome, linked_experience_record]
+    approval_class: routine
+    output_record: experience_record
+    review_deadline_days: 7
+    next_states: []

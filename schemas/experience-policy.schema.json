@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genesis.local/schemas/experience-policy.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "policy_version", "promotion_order", "immutable_evidence", "curated_knowledge", "promotion", "required_fields", "initial_store", "retrieval", "automation_exclusions", "quality_metrics"],
+  "properties": {
+    "id": { "const": "experience_policy" },
+    "policy_version": { "$ref": "#/$defs/semver" },
+    "promotion_order": { "const": ["raw_event", "reviewed_experience", "validated_lesson", "principle"] },
+    "immutable_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["append_only", "stored_record_types", "silent_rewrite_forbidden", "corrections"],
+      "properties": {
+        "append_only": { "const": true },
+        "stored_record_types": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/identifier" } },
+        "silent_rewrite_forbidden": { "const": true },
+        "corrections": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["create_new_record", "require_supersedes", "preserve_prior_record"],
+          "properties": {
+            "create_new_record": { "const": true },
+            "require_supersedes": { "const": true },
+            "preserve_prior_record": { "const": true }
+          }
+        }
+      }
+    },
+    "curated_knowledge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner_role", "human_curation_cadence", "link_supporting_evidence", "link_contradicting_evidence", "confidence_required", "validity_window_required", "supersedes_required_for_replacement", "current_belief_projection"],
+      "properties": {
+        "owner_role": { "$ref": "#/$defs/identifier" },
+        "human_curation_cadence": { "const": "weekly" },
+        "link_supporting_evidence": { "const": true },
+        "link_contradicting_evidence": { "const": true },
+        "confidence_required": { "const": true },
+        "validity_window_required": { "const": true },
+        "supersedes_required_for_replacement": { "const": true },
+        "current_belief_projection": { "const": true }
+      }
+    },
+    "promotion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewed_experience", "validated_lesson", "principle"],
+      "properties": {
+        "reviewed_experience": {
+          "type": "object", "additionalProperties": false,
+          "required": ["human_review_required", "evidence_provenance_required"],
+          "properties": { "human_review_required": { "const": true }, "evidence_provenance_required": { "const": true } }
+        },
+        "validated_lesson": {
+          "type": "object", "additionalProperties": false,
+          "required": ["outcome_evidence_required", "counterevidence_review_required", "reuse_scope_required"],
+          "properties": { "outcome_evidence_required": { "const": true }, "counterevidence_review_required": { "const": true }, "reuse_scope_required": { "const": true } }
+        },
+        "principle": {
+          "type": "object", "additionalProperties": false,
+          "required": ["replicated_evidence_or_human_approval_required", "explicit_human_approver", "single_event_auto_promotion_forbidden", "evidence_quality_limitations_preserved", "human_approval_does_not_upgrade_evidence_quality"],
+          "properties": {
+            "replicated_evidence_or_human_approval_required": { "const": true },
+            "explicit_human_approver": { "const": "human_authority" },
+            "single_event_auto_promotion_forbidden": { "const": true },
+            "evidence_quality_limitations_preserved": { "const": true },
+            "human_approval_does_not_upgrade_evidence_quality": { "const": true }
+          }
+        }
+      }
+    },
+    "required_fields": { "const": ["id", "timestamp", "owner", "business", "domain", "tags", "context", "hypothesis", "decision", "action", "outcome", "baseline", "expected_result", "metric_definition", "actual_result", "supporting_evidence", "contradicting_evidence", "confidence", "validity_window", "privacy_classification", "review_status", "related", "duplicate", "contradicts", "supersedes", "reflection", "reusable_lesson", "reuse_evidence"] },
+    "initial_store": {
+      "type": "object", "additionalProperties": false, "required": ["format", "database_required"],
+      "properties": { "format": { "const": "reviewed_yaml_record_collection" }, "database_required": { "const": false } }
+    },
+    "retrieval": {
+      "type": "object", "additionalProperties": false, "required": ["methods", "benchmarks_required"],
+      "properties": { "methods": { "const": ["keyword_search", "field_search", "weekly_human_curated_synthesis"] }, "benchmarks_required": { "const": true } }
+    },
+    "automation_exclusions": { "const": ["vector_search", "automated_extraction", "autonomous_principle_promotion"] },
+    "quality_metrics": { "const": ["experience_retrieval_success", "contradiction_resolution_time", "lesson_reuse_rate", "changed_decisions", "stale_record_rate", "avoided_cost_or_rework"] }
+  },
+  "$defs": {
+    "semver": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "identifier": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" }
+  }
+}

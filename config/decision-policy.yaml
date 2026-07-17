@@ -1,0 +1,69 @@
+id: decision_policy
+policy_version: 2.0.0
+classification_precedence:
+  - constitutional_action
+  - protected_action
+  - major_bet
+  - experiment
+  - micro_experiment
+  - routine
+classes:
+  routine:
+    allowed_risk: [low]
+    required_approver: role_permission
+    required_records: [decision_record]
+    cash: { max_usd: 0, inclusive: true }
+    duration: { max_days: 0, inclusive: true }
+    human_approved_aggregate_envelope_required: false
+  micro_experiment:
+    allowed_risk: [low]
+    required_approver: ceo_or_standing_ceo_approval
+    required_records:
+      - experiment_record
+      - preregistered_hypothesis
+      - metric
+      - stop_condition
+      - owner
+      - decision_date
+    cash: { max_usd: 500, inclusive: true }
+    duration: { max_days: 7, inclusive: true }
+    human_approved_aggregate_envelope_required: true
+  experiment:
+    allowed_risk: [low, medium]
+    required_approver: ceo
+    required_records: [experiment_record, approval_record]
+    cash: { max_usd: 5000, inclusive: true }
+    duration: { max_days: 30, inclusive: true }
+    human_approved_aggregate_envelope_required: true
+  major_bet:
+    allowed_risk: [low, medium, high, critical]
+    required_approver: human_authority
+    required_records:
+      - constitution_review
+      - evidence_review
+      - ceo_recommendation
+      - approval_record
+    cash: { max_usd: null, inclusive: false }
+    duration: { max_days: null, inclusive: false }
+    human_approved_aggregate_envelope_required: true
+    triggers:
+      cash_over_usd: 5000
+      duration_over_days: 30
+      capacity_share_over: 0.20
+      strategically_difficult_reversal: true
+      multi_business_material_change: true
+      risk_levels: [high, critical]
+  protected_action:
+    allowed_risk: [low, medium, high, critical]
+    required_approver: human_authority
+    required_records: [approval_record]
+    cash: { max_usd: null, inclusive: false }
+    duration: { max_days: null, inclusive: false }
+    human_approved_aggregate_envelope_required: true
+  constitutional_action:
+    allowed_risk: [low, medium, high, critical]
+    required_approver: human_authority
+    required_records: [constitutional_amendment, approval_record, compatibility_validation]
+    cash: { max_usd: null, inclusive: false }
+    duration: { max_days: null, inclusive: false }
+    human_approved_aggregate_envelope_required: false

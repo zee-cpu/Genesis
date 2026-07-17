@@ -1,0 +1,131 @@
+id: business_lifecycle
+policy_version: 2.0.0
+initial_state: discover
+terminal_states: [scale, learning_lab, archive, kill]
+learning_prototype_exception:
+  required_approver: human_authority
+  budget_capped: true
+  non_production: true
+  expiry_required: true
+states:
+  - id: discover
+    accountable_role: ceo
+    responsible_role: research
+    required_inputs: [decision_record]
+    allowed_actions: [public_source_research, customer_discovery_design, opportunity_hypothesis]
+    exit_criteria: [identified_customer_and_problem, testable_opportunity_hypothesis]
+    required_evidence: [source_log, customer_reality_evidence]
+    approval_class: routine
+    output_record: decision_record
+    review_deadline_days: 14
+    next_states: [validate]
+  - id: validate
+    accountable_role: ceo
+    responsible_role: research
+    required_inputs: [decision_record]
+    allowed_actions: [validation_experiment, evidence_review, learning_prototype_exception_request]
+    exit_criteria: [precommitted_validation_pass_or_approved_exception]
+    required_evidence: [baseline, metric, pass_criteria, validation_outcome]
+    approval_class: experiment
+    output_record: experiment_record
+    review_deadline_days: 30
+    next_states: [build, archive, kill]
+  - id: build
+    accountable_role: ceo
+    responsible_role: builder
+    required_inputs: [decision_record, experiment_record]
+    allowed_actions: [sandboxed_implementation, testing, security_review]
+    exit_criteria: [acceptance_tests_passed, launch_risks_documented]
+    required_evidence: [test_results, security_review, rollback_plan]
+    approval_class: experiment
+    output_record: decision_record
+    review_deadline_days: 30
+    next_states: [launch, validate, kill]
+  - id: launch
+    accountable_role: human_authority
+    responsible_role: operator
+    required_inputs: [decision_record, approval_record]
+    allowed_actions: [approved_production_launch, approved_external_communication]
+    exit_criteria: [human_launch_approval_valid, launch_checks_passed]
+    required_evidence: [approval_scope, production_checklist, rollback_readiness]
+    approval_class: protected_action
+    output_record: approval_record
+    review_deadline_days: 7
+    next_states: [operate]
+  - id: operate
+    accountable_role: ceo
+    responsible_role: operator
+    required_inputs: [approval_record, decision_record]
+    allowed_actions: [approved_business_operations, customer_support, metric_collection]
+    exit_criteria: [scheduled_or_triggered_review_due]
+    required_evidence: [operating_metrics, incidents_and_exceptions, customer_feedback]
+    approval_class: routine
+    output_record: decision_record
+    review_deadline_days: 30
+    next_states: [review]
+  - id: review
+    accountable_role: ceo
+    responsible_role: analyst
+    required_inputs: [decision_record, experiment_record, experience_record]
+    allowed_actions: [outcome_review, confidence_update, portfolio_recommendation]
+    exit_criteria: [evidence_reviewed, outcome_selected]
+    required_evidence: [actual_outcome, actual_cost, confidence_update]
+    approval_class: major_bet
+    output_record: decision_record
+    review_deadline_days: 7
+    next_states: [scale, pivot, learning_lab, archive, kill]
+  - id: scale
+    accountable_role: human_authority
+    responsible_role: ceo
+    required_inputs: [decision_record, approval_record]
+    allowed_actions: [approved_scale_handoff]
+    exit_criteria: [new_workflow_instance_required]
+    required_evidence: [scale_decision, approved_envelope]
+    approval_class: major_bet
+    output_record: decision_record
+    review_deadline_days: 30
+    next_states: []
+  - id: pivot
+    accountable_role: ceo
+    responsible_role: research
+    required_inputs: [decision_record, experience_record]
+    allowed_actions: [create_versioned_validation_instance]
+    exit_criteria: [new_hypothesis_versioned]
+    required_evidence: [pivot_rationale, changed_assumptions]
+    approval_class: experiment
+    output_record: decision_record
+    review_deadline_days: 14
+    next_states: [validate]
+  - id: learning_lab
+    accountable_role: ceo
+    responsible_role: research
+    required_inputs: [decision_record, experience_record]
+    allowed_actions: [bounded_learning_lab_handoff]
+    exit_criteria: [separate_learning_lab_governance_required]
+    required_evidence: [failed_initiative, learning_budget, expiry]
+    approval_class: experiment
+    output_record: decision_record
+    review_deadline_days: 30
+    next_states: []
+  - id: archive
+    accountable_role: ceo
+    responsible_role: analyst
+    required_inputs: [decision_record, experience_record]
+    allowed_actions: [archive_evidence]
+    exit_criteria: [records_linked_and_retained]
+    required_evidence: [archive_rationale, reusable_lessons]
+    approval_class: routine
+    output_record: experience_record
+    review_deadline_days: 30
+    next_states: []
+  - id: kill
+    accountable_role: ceo
+    responsible_role: analyst
+    required_inputs: [decision_record, experience_record]
+    allowed_actions: [stop_work, preserve_evidence]
+    exit_criteria: [resources_released, records_closed]
+    required_evidence: [kill_rationale, actual_cost, reusable_lessons]
+    approval_class: routine
+    output_record: experience_record
+    review_deadline_days: 7
+    next_states: []

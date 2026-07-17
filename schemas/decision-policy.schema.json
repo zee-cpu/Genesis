@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genesis.local/schemas/decision-policy.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "policy_version", "classification_precedence", "classes"],
+  "properties": {
+    "id": { "const": "decision_policy" },
+    "policy_version": { "$ref": "#/$defs/semver" },
+    "classification_precedence": {
+      "const": ["constitutional_action", "protected_action", "major_bet", "experiment", "micro_experiment", "routine"]
+    },
+    "classes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["routine", "micro_experiment", "experiment", "major_bet", "protected_action", "constitutional_action"],
+      "properties": {
+        "routine": {
+          "allOf": [
+            { "$ref": "#/$defs/decisionClass" },
+            {
+              "type": "object",
+              "properties": {
+                "allowed_risk": { "const": ["low"] },
+                "required_approver": { "const": "role_permission" },
+                "cash": { "const": { "max_usd": 0, "inclusive": true } },
+                "duration": { "const": { "max_days": 0, "inclusive": true } },
+                "human_approved_aggregate_envelope_required": { "const": false }
+              }
+            }
+          ]
+        },
+        "micro_experiment": {
+          "allOf": [
+            { "$ref": "#/$defs/decisionClass" },
+            {
+              "type": "object",
+              "properties": {
+                "allowed_risk": { "const": ["low"] },
+                "required_approver": { "const": "ceo_or_standing_ceo_approval" },
+                "cash": { "const": { "max_usd": 500, "inclusive": true } },
+                "duration": { "const": { "max_days": 7, "inclusive": true } },
+                "human_approved_aggregate_envelope_required": { "const": true }
+              }
+            }
+          ]
+        },
+        "experiment": {
+          "allOf": [
+            { "$ref": "#/$defs/decisionClass" },
+            {
+              "type": "object",
+              "properties": {
+                "allowed_risk": { "const": ["low", "medium"] },
+                "required_approver": { "const": "ceo" },
+                "cash": { "const": { "max_usd": 5000, "inclusive": true } },
+                "duration": { "const": { "max_days": 30, "inclusive": true } },
+                "human_approved_aggregate_envelope_required": { "const": true }
+              }
+            }
+          ]
+        },
+        "major_bet": {
+          "allOf": [
+            { "$ref": "#/$defs/decisionClass" },
+            {
+              "type": "object",
+              "required": ["triggers"],
+              "properties": {
+                "required_approver": { "const": "human_authority" },
+                "cash": { "const": { "max_usd": null, "inclusive": false } },
+                "duration": { "const": { "max_days": null, "inclusive": false } },
+                "human_approved_aggregate_envelope_required": { "const": true },
+                "triggers": { "$ref": "#/$defs/majorBetTriggers" }
+              }
+            }
+          ]
+        },
+        "protected_action": {
+          "allOf": [
+            { "$ref": "#/$defs/decisionClass" },
+            {
+              "type": "object",
+              "properties": {
+                "required_approver": { "const": "human_authority" },
+                "cash": { "const": { "max_usd": null, "inclusive": false } },
+                "duration": { "const": { "max_days": null, "inclusive": false } },
+                "human_approved_aggregate_envelope_required": { "const": true }
+              }
+            }
+          ]
+        },
+        "constitutional_action": {
+          "allOf": [
+            { "$ref": "#/$defs/decisionClass" },
+            {
+              "type": "object",
+              "properties": {
+                "required_approver": { "const": "human_authority" },
+                "cash": { "const": { "max_usd": null, "inclusive": false } },
+                "duration": { "const": { "max_days": null, "inclusive": false } },
+                "human_approved_aggregate_envelope_required": { "const": false }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "semver": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "riskLevel": { "enum": ["low", "medium", "high", "critical"] },
+    "limit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_usd", "inclusive"],
+      "properties": {
+        "max_usd": { "type": ["number", "null"], "minimum": 0 },
+        "inclusive": { "type": "boolean" }
+      }
+    },
+    "durationLimit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_days", "inclusive"],
+      "properties": {
+        "max_days": { "type": ["integer", "null"], "minimum": 0 },
+        "inclusive": { "type": "boolean" }
+      }
+    },
+    "decisionClass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowed_risk", "required_approver", "required_records", "cash", "duration", "human_approved_aggregate_envelope_required"],
+      "properties": {
+        "allowed_risk": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/riskLevel" } },
+        "required_approver": { "enum": ["role_permission", "ceo_or_standing_ceo_approval", "ceo", "human_authority"] },
+        "required_records": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "cash": { "$ref": "#/$defs/limit" },
+        "duration": { "$ref": "#/$defs/durationLimit" },
+        "human_approved_aggregate_envelope_required": { "type": "boolean" },
+        "triggers": { "$ref": "#/$defs/majorBetTriggers" }
+      }
+    },
+    "majorBetTriggers": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cash_over_usd", "duration_over_days", "capacity_share_over", "strategically_difficult_reversal", "multi_business_material_change", "risk_levels"],
+      "properties": {
+        "cash_over_usd": { "const": 5000 },
+        "duration_over_days": { "const": 30 },
+        "capacity_share_over": { "const": 0.2 },
+        "strategically_difficult_reversal": { "const": true },
+        "multi_business_material_change": { "const": true },
+        "risk_levels": { "const": ["high", "critical"] }
+      }
+    }
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genesis.local/schemas/permissions.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "policy_version", "default_deny", "permission_requirements", "low_risk_permissions", "protected_actions", "approval_validity", "human_approval"],
+  "properties": {
+    "id": { "const": "permissions" },
+    "policy_version": { "$ref": "#/$defs/semver" },
+    "default_deny": { "const": true },
+    "permission_requirements": {
+      "const": ["valid_effective_policy", "authorized_role_and_permission", "unexpired_budget_duration_data_and_risk_envelope", "valid_required_approvals", "no_applicable_suspension_or_revocation", "required_evidence_and_records"]
+    },
+    "low_risk_permissions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/lowRiskPermission" }
+    },
+    "protected_actions": {
+      "type": "array",
+      "minItems": 12,
+      "maxItems": 12,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/protectedAction" }
+    },
+    "approval_validity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_checks", "deny_if"],
+      "properties": {
+        "required_checks": { "const": ["scope", "actor", "budget", "duration", "data_class", "risk_class", "effective_time", "expiry", "revocation"] },
+        "deny_if": { "const": ["missing", "expired", "revoked", "mismatched", "ambiguous"] }
+      }
+    },
+    "human_approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal_id", "explicit_record_required", "inference_forbidden"],
+      "properties": {
+        "principal_id": { "const": "genesis-owner" },
+        "explicit_record_required": { "const": true },
+        "inference_forbidden": { "const": true }
+      }
+    }
+  },
+  "$defs": {
+    "semver": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "roleId": { "enum": ["human_authority", "ceo", "research", "builder", "operator", "analyst"] },
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "lowRiskPermission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description", "allowed_roles", "constraints"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonEmptyString" },
+        "description": { "$ref": "#/$defs/nonEmptyString" },
+        "allowed_roles": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/roleId" } },
+        "constraints": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/nonEmptyString" } }
+      }
+    },
+    "protectedAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description", "risk_floor", "required_approver"],
+      "properties": {
+        "id": { "enum": ["legal_commitment", "outside_portfolio_spend", "financial_authority", "production_change", "sensitive_data", "external_communication", "regulated_activity", "security_or_access_change", "public_representation", "legal_entity_change", "constitutional_change", "high_or_critical_risk"] },
+        "description": { "$ref": "#/$defs/nonEmptyString" },
+        "risk_floor": { "enum": ["medium", "high", "critical"] },
+        "required_approver": { "const": "human_authority" }
+      }
+    }
+  }
+}

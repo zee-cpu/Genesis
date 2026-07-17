@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genesis.local/schemas/governance.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "policy_version",
+    "effective_date",
+    "default_deny",
+    "human_authority",
+    "approval_semantics",
+    "precedence",
+    "amendment",
+    "exception_policy",
+    "emergency_stop",
+    "ceo_authority"
+  ],
+  "properties": {
+    "id": { "const": "governance" },
+    "policy_version": { "$ref": "#/$defs/semver" },
+    "effective_date": { "type": "string", "format": "date" },
+    "default_deny": { "const": true },
+    "human_authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal_id", "principal_type", "delegable", "powers"],
+      "properties": {
+        "principal_id": { "const": "genesis-owner" },
+        "principal_type": { "const": "human" },
+        "delegable": { "const": false },
+        "powers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        }
+      }
+    },
+    "approval_semantics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["explicit_record_required", "inferred_approval_forbidden", "silence_is_not_approval", "approver_principal_id"],
+      "properties": {
+        "explicit_record_required": { "const": true },
+        "inferred_approval_forbidden": { "const": true },
+        "silence_is_not_approval": { "const": true },
+        "approver_principal_id": { "const": "genesis-owner" }
+      }
+    },
+    "precedence": {
+      "const": ["emergency_suspension", "normative_policy", "human_approval", "ceo_approval", "explanatory_documentation"]
+    },
+    "amendment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_approver", "version_increment_required", "required_fields"],
+      "properties": {
+        "required_approver": { "const": "human_authority" },
+        "version_increment_required": { "const": true },
+        "required_fields": {
+          "const": ["human_approval", "rationale", "evidence_references", "compatibility_validation", "previous_version", "new_version", "effective_date", "rollback_version"]
+        }
+      }
+    },
+    "exception_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_approver", "expiry_required", "permanent_exceptions_forbidden"],
+      "properties": {
+        "required_approver": { "const": "human_authority" },
+        "expiry_required": { "const": true },
+        "permanent_exceptions_forbidden": { "const": true }
+      }
+    },
+    "emergency_stop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["activation_authority", "release_authority", "release_record_required", "release_record_required_fields"],
+      "properties": {
+        "activation_authority": { "const": "human_authority" },
+        "release_authority": { "const": "human_authority" },
+        "release_record_required": { "const": true },
+        "release_record_required_fields": {
+          "const": ["cause", "remediation_evidence", "restored_scopes", "monitoring_period"]
+        }
+      }
+    },
+    "ceo_authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["appointing_authority", "accountable_to", "may_amend_policy", "may_self_approve_permission_escalation", "may_waive_protected_action_controls", "may_overrule_human_authority"],
+      "properties": {
+        "appointing_authority": { "const": "human_authority" },
+        "accountable_to": { "const": "human_authority" },
+        "may_amend_policy": { "const": false },
+        "may_self_approve_permission_escalation": { "const": false },
+        "may_waive_protected_action_controls": { "const": false },
+        "may_overrule_human_authority": { "const": false }
+      }
+    }
+  },
+  "$defs": {
+    "semver": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "nonEmptyString": { "type": "string", "minLength": 1 }
+  }
+}

@@ -1,0 +1,144 @@
+id: metrics_policy
+policy_version: 2.0.0
+metrics:
+  - id: forecast_calibration
+    formula: sum_squared_probability_error_divided_by_resolved_forecasts
+    unit: brier_score
+    population: material_decisions_with_probability_forecasts
+    denominator: resolved_forecasts
+    source: [decision_record, outcome_evidence]
+    cadence: monthly
+    owner: analyst
+    baseline: pre_protocol_30_day_brier_score
+    target: lower_than_baseline_and_comparator
+    guardrails: [minimum_10_resolved_forecasts, report_sample_size]
+  - id: decision_cycle_time
+    formula: median_hours_from_problem_registration_to_decision
+    unit: hours
+    population: material_decisions
+    denominator: completed_material_decisions
+    source: [decision_record]
+    cadence: monthly
+    owner: analyst
+    baseline: pre_protocol_30_day_median
+    target: lower_without_increasing_exception_or_rework_rates
+    guardrails: [segment_by_decision_class, exclude_waiting_on_external_authority]
+  - id: assumptions_tested_before_build
+    formula: material_assumptions_tested_before_build_divided_by_material_assumptions
+    unit: ratio
+    population: opportunities_entering_build
+    denominator: registered_material_assumptions
+    source: [decision_record, experiment_record]
+    cadence: per_build_and_monthly
+    owner: analyst
+    baseline: pre_protocol_30_day_ratio
+    target: greater_than_baseline_and_comparator
+    guardrails: [assumptions_registered_before_results, no_retroactive_reclassification]
+  - id: avoidable_rework
+    formula: hours_of_rework_attributable_to_missed_known_evidence
+    unit: hours
+    population: completed_build_and_operating_work
+    denominator: total_delivery_hours
+    source: [decision_record, experience_record, work_log]
+    cadence: monthly
+    owner: analyst
+    baseline: pre_protocol_30_day_hours_and_ratio
+    target: lower_than_baseline_and_comparator
+    guardrails: [human_adjudication_required, distinguish_learning_from_avoidable_rework]
+  - id: realized_value_per_experiment
+    formula: realized_economic_or_strategic_value_divided_by_total_experiment_cost
+    unit: value_cost_ratio
+    population: closed_experiments
+    denominator: total_cash_and_labor_cost
+    source: [experiment_record, decision_record]
+    cadence: monthly
+    owner: analyst
+    baseline: pre_protocol_30_day_value_cost_ratio
+    target: greater_than_baseline_and_comparator
+    guardrails: [include_failed_experiments, disclose_value_model]
+  - id: lesson_reuse_rate
+    formula: decisions_using_prior_validated_lessons_divided_by_eligible_decisions
+    unit: ratio
+    population: decisions_with_relevant_prior_experience
+    denominator: eligible_decisions
+    source: [decision_record, experience_record]
+    cadence: monthly
+    owner: analyst
+    baseline: pre_protocol_30_day_ratio
+    target: greater_than_baseline_and_comparator
+    guardrails: [reuse_requires_linked_record, relevance_human_reviewed]
+  - id: experience_retrieval_success
+    formula: successful_retrieval_tasks_divided_by_benchmark_retrieval_tasks
+    unit: ratio
+    population: benchmark_experience_queries
+    denominator: benchmark_queries
+    source: [retrieval_benchmark_log]
+    cadence: weekly
+    owner: analyst
+    baseline: pre_protocol_benchmark_run
+    target: at_least_0_80_without_false_confidence
+    guardrails: [fixed_benchmark_set, score_precision_and_recall]
+  - id: system_overhead_ratio
+    formula: genesis_internal_system_hours_divided_by_total_available_hours
+    unit: ratio
+    population: all_weekly_capacity
+    denominator: total_available_hours
+    source: [work_log]
+    cadence: weekly
+    owner: ceo
+    baseline: pre_protocol_30_day_ratio
+    target: at_or_below_0_10_in_bootstrap
+    guardrails: [include_automation_and_documentation_time, no_business_work_reclassification]
+  - id: customer_reality_ratio
+    formula: hours_with_customers_or_customer_evidence_divided_by_opportunity_hours
+    unit: ratio
+    population: discovery_validation_and_review_work
+    denominator: total_opportunity_hours
+    source: [work_log, customer_evidence_log]
+    cadence: weekly
+    owner: research
+    baseline: pre_protocol_30_day_ratio
+    target: greater_than_baseline_and_comparator
+    guardrails: [exclude_internal_speculation, privacy_controls_apply]
+  - id: policy_exception_rate
+    formula: approved_or_denied_exception_requests_divided_by_governed_actions
+    unit: ratio
+    population: governed_actions
+    denominator: governed_actions
+    source: [approval_record, decision_record]
+    cadence: monthly
+    owner: analyst
+    baseline: pre_protocol_30_day_ratio
+    target: no_increase_without_documented_policy_defect
+    guardrails: [report_approved_and_denied_separately, preserve_exception_rationale]
+  - id: protected_action_denial_and_escalation
+    formula: count_protected_action_denials_and_escalations_by_action_class
+    unit: count
+    population: attempted_protected_actions
+    denominator: attempted_protected_actions
+    source: [approval_record, audit_log]
+    cadence: monthly
+    owner: human_authority
+    baseline: pre_protocol_30_day_counts
+    target: complete_capture_and_no_unapproved_execution
+    guardrails: [zero_silent_bypass, separate_denials_from_escalations]
+genesis_experiment_001:
+  id: genesis_experiment_001
+  objective: determine_whether_genesis_improves_decision_quality
+  pre_use_required: true
+  baseline_period: 30_calendar_days_before_protocol_activation
+  comparator: decisions_made_under_current_manual_practice
+  adjudicator: human_authority
+  excluded_success_measures: [documentation_volume]
+  metric_ids:
+    - forecast_calibration
+    - decision_cycle_time
+    - assumptions_tested_before_build
+    - avoidable_rework
+    - realized_value_per_experiment
+    - lesson_reuse_rate
+    - experience_retrieval_success
+    - system_overhead_ratio
+    - customer_reality_ratio
+    - policy_exception_rate
+    - protected_action_denial_and_escalation

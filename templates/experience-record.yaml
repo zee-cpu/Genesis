@@ -1,0 +1,41 @@
+id: example-experience-001
+record_type: experience_record
+schema_version: 1.0.0
+policy_version: 2.0.0
+created_at: 2026-07-24T11:00:00Z
+updated_at: 2026-07-24T11:00:00Z
+owner: analyst
+affected_business: example-business
+status: active
+evidence_references: [evidence://example/experiment-results]
+related_records: [example-decision-001, example-experiment-001]
+privacy_classification: internal
+immutable_history_refs: [history://example/experience-001/v1]
+example_only: true
+timestamp: 2026-07-24T11:00:00Z
+business: example-business
+domain: customer_validation
+tags: [prototype, customer_reality]
+context: A bounded manual prototype test with five qualified participants.
+hypothesis: Qualified participants will complete the task unaided.
+decision: Run the bounded validation and compare against a 0.60 completion threshold.
+action: Five observed prototype sessions were conducted.
+outcome: Three participants completed the task unaided.
+baseline: zero_prior_prototype_use
+expected_result: completion_ratio_at_least_0_60
+metric_definition: qualified_completions_divided_by_qualified_participants
+actual_result: completion_ratio_0_60
+supporting_evidence: [evidence://example/sessions-1-3]
+contradicting_evidence: [evidence://example/sessions-4-5]
+confidence: 0.60
+valid_from: 2026-07-24T11:00:00Z
+valid_until: 2026-10-24T11:00:00Z
+review_status: reviewed_experience
+related: [example-decision-001, example-experiment-001]
+duplicate: []
+contradicts: []
+supersedes: []
+is_correction: false
+reflection: Passing at the boundary is insufficient for scale and supports a revised validation.
+reusable_lesson: Boundary results should trigger a narrower follow-up test rather than scale.
+reuse_evidence: []

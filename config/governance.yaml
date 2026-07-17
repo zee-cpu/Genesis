@@ -1,0 +1,68 @@
+id: governance
+policy_version: 2.0.0
+effective_date: 2026-07-17
+default_deny: true
+human_authority:
+  principal_id: genesis-owner
+  principal_type: human
+  delegable: false
+  powers:
+    - approve
+    - reject
+    - veto
+    - revoke
+    - suspend
+    - define_envelopes
+    - approve_major_bets
+    - approve_protected_actions
+    - amend_constitution
+    - approve_policy_exceptions
+    - activate_emergency_stop
+    - release_emergency_stop
+    - appoint_ceo
+    - replace_ceo
+    - constrain_ceo
+    - remove_ceo
+approval_semantics:
+  explicit_record_required: true
+  inferred_approval_forbidden: true
+  silence_is_not_approval: true
+  approver_principal_id: genesis-owner
+precedence:
+  - emergency_suspension
+  - normative_policy
+  - human_approval
+  - ceo_approval
+  - explanatory_documentation
+amendment:
+  required_approver: human_authority
+  version_increment_required: true
+  required_fields:
+    - human_approval
+    - rationale
+    - evidence_references
+    - compatibility_validation
+    - previous_version
+    - new_version
+    - effective_date
+    - rollback_version
+exception_policy:
+  required_approver: human_authority
+  expiry_required: true
+  permanent_exceptions_forbidden: true
+emergency_stop:
+  activation_authority: human_authority
+  release_authority: human_authority
+  release_record_required: true
+  release_record_required_fields:
+    - cause
+    - remediation_evidence
+    - restored_scopes
+    - monitoring_period
+ceo_authority:
+  appointing_authority: human_authority
+  accountable_to: human_authority
+  may_amend_policy: false
+  may_self_approve_permission_escalation: false
+  may_waive_protected_action_controls: false
+  may_overrule_human_authority: false

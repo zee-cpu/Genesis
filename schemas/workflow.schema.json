@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genesis.local/schemas/workflow.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "policy_version", "initial_state", "terminal_states", "states"],
+  "properties": {
+    "id": { "enum": ["business_lifecycle", "experiment_lifecycle"] },
+    "policy_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "initial_state": { "$ref": "#/$defs/identifier" },
+    "terminal_states": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/identifier" }
+    },
+    "states": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/state" }
+    },
+    "preregistration_required_fields": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/identifier" }
+    },
+    "closure_required_fields": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/identifier" }
+    },
+    "learning_prototype_exception": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_approver", "budget_capped", "non_production", "expiry_required"],
+      "properties": {
+        "required_approver": { "const": "human_authority" },
+        "budget_capped": { "const": true },
+        "non_production": { "const": true },
+        "expiry_required": { "const": true }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "id": { "const": "business_lifecycle" } }, "required": ["id"] },
+      "then": {
+        "properties": { "learning_prototype_exception": {} },
+        "required": ["learning_prototype_exception"]
+      }
+    },
+    {
+      "if": { "properties": { "id": { "const": "experiment_lifecycle" } }, "required": ["id"] },
+      "then": {
+        "properties": {
+          "preregistration_required_fields": {},
+          "closure_required_fields": {}
+        },
+        "required": ["preregistration_required_fields", "closure_required_fields"]
+      }
+    }
+  ],
+  "$defs": {
+    "identifier": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "nonemptyStrings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "accountable_role", "responsible_role", "required_inputs", "allowed_actions", "exit_criteria", "required_evidence", "approval_class", "output_record", "review_deadline_days", "next_states"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "accountable_role": { "$ref": "#/$defs/identifier" },
+        "responsible_role": { "$ref": "#/$defs/identifier" },
+        "required_inputs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identifier" }
+        },
+        "allowed_actions": { "$ref": "#/$defs/nonemptyStrings" },
+        "exit_criteria": { "$ref": "#/$defs/nonemptyStrings" },
+        "required_evidence": { "$ref": "#/$defs/nonemptyStrings" },
+        "approval_class": {
+          "enum": ["routine", "micro_experiment", "experiment", "major_bet", "protected_action", "constitutional_action"]
+        },
+        "output_record": { "$ref": "#/$defs/identifier" },
+        "review_deadline_days": { "type": "integer", "minimum": 1 },
+        "next_states": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/identifier" }
+        }
+      }
+    }
+  }
+}

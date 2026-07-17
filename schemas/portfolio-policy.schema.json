@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genesis.local/schemas/portfolio-policy.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "policy_version", "modes", "proven_definition", "automation", "internal_artifact_requirements", "internal_artifacts_are_not_business_outcomes", "stop_without_external_decision_or_validated_need", "learning_lab", "aggregate_experiment_envelope"],
+  "properties": {
+    "id": { "const": "portfolio_policy" },
+    "policy_version": { "$ref": "#/$defs/semver" },
+    "modes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bootstrap", "operating"],
+      "properties": {
+        "bootstrap": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["allocations", "active_business_opportunities", "system_meta_work_max_share"],
+          "properties": {
+            "allocations": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["primary_opportunity", "experiments", "reserve"],
+              "properties": {
+                "primary_opportunity": { "const": 0.8 },
+                "experiments": { "const": 0.15 },
+                "reserve": { "const": 0.05 }
+              }
+            },
+            "active_business_opportunities": { "const": 1 },
+            "system_meta_work_max_share": { "const": 0.1 }
+          }
+        },
+        "operating": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["allocations"],
+          "properties": {
+            "allocations": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["proven_businesses", "experiments", "learning_labs"],
+              "properties": {
+                "proven_businesses": { "const": 0.8 },
+                "experiments": { "const": 0.15 },
+                "learning_labs": { "const": 0.05 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "proven_definition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repeatable_demand_required", "identified_customer_required", "working_value_delivery_required", "precommitted_economic_or_strategic_threshold_required"],
+      "properties": {
+        "repeatable_demand_required": { "const": true },
+        "identified_customer_required": { "const": true },
+        "working_value_delivery_required": { "const": true },
+        "precommitted_economic_or_strategic_threshold_required": { "const": true }
+      }
+    },
+    "automation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum_repeated_material_manual_failures"],
+      "properties": {
+        "minimum_repeated_material_manual_failures": { "const": 3 }
+      }
+    },
+    "internal_artifact_requirements": { "const": ["external_decision", "owner", "review_date", "sunset_date"] },
+    "internal_artifacts_are_not_business_outcomes": { "const": true },
+    "stop_without_external_decision_or_validated_need": { "const": true },
+    "learning_lab": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_fields", "reserve_use_requires_real_failed_initiative"],
+      "properties": {
+        "required_fields": { "const": ["budget", "owner", "learning_metric", "monthly_review", "expiry"] },
+        "reserve_use_requires_real_failed_initiative": { "const": true }
+      }
+    },
+    "aggregate_experiment_envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["human_approved_required", "total_spend_enforced", "individual_compliance_is_not_sufficient"],
+      "properties": {
+        "human_approved_required": { "const": true },
+        "total_spend_enforced": { "const": true },
+        "individual_compliance_is_not_sufficient": { "const": true }
+      }
+    }
+  },
+  "$defs": {
+    "semver": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }
+  }
+}

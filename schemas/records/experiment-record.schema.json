@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genesis.local/schemas/records/experiment-record.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["id", "record_type", "schema_version", "policy_version", "created_at", "updated_at", "owner", "affected_business", "status", "evidence_references", "related_records", "privacy_classification", "immutable_history_refs", "problem", "supported_decision", "hypothesis", "confidence", "evidence", "counterevidence", "baseline", "comparison_method", "metric", "expected_outcome", "minimum_meaningful_effect", "failure_conditions", "stop_conditions", "limits", "decision_date", "allowed_outcomes", "approval_references", "actual_cost", "results", "reflection", "outcome", "experience_reference"],
+  "properties": {
+    "id": { "$ref": "#/$defs/id" }, "record_type": { "const": "experiment_record" },
+    "schema_version": { "$ref": "#/$defs/semver" }, "policy_version": { "const": "2.0.0" },
+    "created_at": { "$ref": "#/$defs/dateTime" }, "updated_at": { "$ref": "#/$defs/dateTime" },
+    "owner": { "$ref": "#/$defs/nonempty" }, "affected_business": { "$ref": "#/$defs/nonempty" },
+    "status": { "enum": ["draft", "active", "closed", "superseded"] },
+    "evidence_references": { "$ref": "#/$defs/nonemptyRefs" }, "related_records": { "$ref": "#/$defs/recordRefs" },
+    "privacy_classification": { "$ref": "#/$defs/privacy" }, "immutable_history_refs": { "$ref": "#/$defs/nonemptyRefs" },
+    "example_only": { "type": "boolean" }, "problem": { "$ref": "#/$defs/nonempty" }, "supported_decision": { "$ref": "#/$defs/recordRef" },
+    "hypothesis": { "$ref": "#/$defs/nonempty" }, "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "evidence": { "$ref": "#/$defs/nonemptyRefs" }, "counterevidence": { "$ref": "#/$defs/refs" },
+    "baseline": { "$ref": "#/$defs/nonempty" }, "comparison_method": { "$ref": "#/$defs/nonempty" },
+    "metric": {
+      "type": "object", "additionalProperties": false, "required": ["formula", "population", "denominator", "data_source"],
+      "properties": { "formula": { "$ref": "#/$defs/nonempty" }, "population": { "$ref": "#/$defs/nonempty" }, "denominator": { "$ref": "#/$defs/nonempty" }, "data_source": { "$ref": "#/$defs/nonempty" } }
+    },
+    "expected_outcome": { "$ref": "#/$defs/nonempty" }, "minimum_meaningful_effect": { "$ref": "#/$defs/nonempty" },
+    "failure_conditions": { "$ref": "#/$defs/nonemptyRefs" }, "stop_conditions": { "$ref": "#/$defs/nonemptyRefs" },
+    "limits": {
+      "type": "object", "additionalProperties": false, "required": ["cash_usd", "labor_hours", "duration_days", "data_classes", "risk_level"],
+      "properties": { "cash_usd": { "type": "number", "minimum": 0 }, "labor_hours": { "type": "number", "minimum": 0 }, "duration_days": { "type": "integer", "minimum": 0 }, "data_classes": { "$ref": "#/$defs/nonemptyRefs" }, "risk_level": { "enum": ["low", "medium", "high", "critical"] } }
+    },
+    "decision_date": { "$ref": "#/$defs/dateTime" },
+    "allowed_outcomes": { "const": ["scale", "pivot", "learning_lab", "archive", "kill"] },
+    "approval_references": { "$ref": "#/$defs/nonemptyRecordRefs" },
+    "actual_cost": {
+      "type": "object", "additionalProperties": false, "required": ["cash_usd", "labor_hours"],
+      "properties": { "cash_usd": { "type": "number", "minimum": 0 }, "labor_hours": { "type": "number", "minimum": 0 } }
+    },
+    "results": { "$ref": "#/$defs/nonempty" }, "reflection": { "$ref": "#/$defs/nonempty" },
+    "outcome": { "enum": ["scale", "pivot", "learning_lab", "archive", "kill"] }, "experience_reference": { "$ref": "#/$defs/recordRef" }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" }, "recordRef": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "semver": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }, "dateTime": { "type": "string", "format": "date-time" },
+    "nonempty": { "type": "string", "minLength": 1 }, "refs": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/nonempty" } },
+    "recordRefs": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/recordRef" } },
+    "nonemptyRecordRefs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/recordRef" } },
+    "nonemptyRefs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/nonempty" } },
+    "privacy": { "enum": ["public", "internal", "confidential", "restricted"] }
+  }
+}
