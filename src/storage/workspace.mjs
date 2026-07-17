@@ -13,7 +13,7 @@ export function workspacePaths(projectRoot) {
     decisions: path.join(records, "decisions"),
     experiments: path.join(records, "experiments"),
     evidence: path.join(records, "evidence"),
-    db: path.join(root, "workspace.sqlite"),
+    db: path.join(root, "genesis.db"),
     lock: path.join(root, "workspace.lock"),
   };
 }
