@@ -2,13 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://genesis.local/schemas/records/experiment-record.schema.json",
   "type": "object", "additionalProperties": false,
-  "required": ["id", "record_type", "schema_version", "policy_version", "created_at", "updated_at", "owner", "affected_business", "status", "evidence_references", "related_records", "privacy_classification", "immutable_history_refs", "problem", "supported_decision", "hypothesis", "confidence", "evidence", "counterevidence", "baseline", "comparison_method", "metric", "expected_outcome", "minimum_meaningful_effect", "failure_conditions", "stop_conditions", "limits", "decision_date", "allowed_outcomes", "approval_references", "actual_cost", "results", "reflection", "outcome", "experience_reference"],
+  "required": ["id", "record_type", "schema_version", "policy_version", "created_at", "updated_at", "owner", "affected_business", "status", "evidence_references", "related_records", "privacy_classification", "immutable_history_refs", "subtype", "validation_outcome", "problem", "supported_decision", "hypothesis", "confidence", "evidence", "counterevidence", "baseline", "comparison_method", "metric", "expected_outcome", "minimum_meaningful_effect", "failure_conditions", "stop_conditions", "limits", "decision_date", "allowed_outcomes", "approval_references"],
   "properties": {
     "id": { "$ref": "#/$defs/id" }, "record_type": { "const": "experiment_record" },
     "schema_version": { "$ref": "#/$defs/semver" }, "policy_version": { "const": "2.0.0" },
     "created_at": { "$ref": "#/$defs/dateTime" }, "updated_at": { "$ref": "#/$defs/dateTime" },
     "owner": { "$ref": "#/$defs/nonempty" }, "affected_business": { "$ref": "#/$defs/nonempty" },
     "status": { "enum": ["draft", "active", "closed", "superseded"] },
+    "subtype": { "enum": ["validation"] }, "validation_outcome": { "enum": ["pending", "passed", "failed"] },
     "evidence_references": { "$ref": "#/$defs/nonemptyRefs" }, "related_records": { "$ref": "#/$defs/recordRefs" },
     "privacy_classification": { "$ref": "#/$defs/privacy" }, "immutable_history_refs": { "$ref": "#/$defs/nonemptyRefs" },
     "example_only": { "type": "boolean" }, "problem": { "$ref": "#/$defs/nonempty" }, "supported_decision": { "$ref": "#/$defs/recordRef" },
@@ -27,14 +28,38 @@
     },
     "decision_date": { "$ref": "#/$defs/dateTime" },
     "allowed_outcomes": { "const": ["scale", "pivot", "learning_lab", "archive", "kill"] },
-    "approval_references": { "$ref": "#/$defs/nonemptyRecordRefs" },
+    "approval_references": { "$ref": "#/$defs/recordRefs" },
     "actual_cost": {
       "type": "object", "additionalProperties": false, "required": ["cash_usd", "labor_hours"],
       "properties": { "cash_usd": { "type": "number", "minimum": 0 }, "labor_hours": { "type": "number", "minimum": 0 } }
     },
     "results": { "$ref": "#/$defs/nonempty" }, "reflection": { "$ref": "#/$defs/nonempty" },
-    "outcome": { "enum": ["scale", "pivot", "learning_lab", "archive", "kill"] }, "experience_reference": { "$ref": "#/$defs/recordRef" }
+    "outcome": { "enum": ["scale", "pivot", "learning_lab", "archive", "kill"] }, "experience_reference": { "$ref": "#/$defs/recordRef" },
+    "confidence_update": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "decision_outcome": { "type": ["string", "null"], "enum": ["scale", "pivot", "learning_lab", "archive", "kill", null] }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "enum": ["active", "closed"] } }, "required": ["status"] },
+      "then": { "properties": { "approval_references": { "$ref": "#/$defs/nonemptyRecordRefs" } } }
+    },
+    {
+      "if": { "properties": { "status": { "const": "closed" } }, "required": ["status"] },
+      "then": {
+        "required": ["actual_cost", "results", "reflection", "outcome", "experience_reference", "confidence_update", "decision_outcome"],
+        "properties": {
+          "actual_cost": true,
+          "results": true,
+          "reflection": true,
+          "outcome": true,
+          "experience_reference": true,
+          "confidence_update": true,
+          "decision_outcome": true,
+          "validation_outcome": { "enum": ["passed", "failed"] }
+        }
+      }
+    }
+  ],
   "$defs": {
     "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" }, "recordRef": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
     "semver": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }, "dateTime": { "type": "string", "format": "date-time" },

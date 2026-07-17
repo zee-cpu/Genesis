@@ -133,6 +133,56 @@ test("approval scope and actor match exactly", () => {
   );
 });
 
+test("approval limits cannot exceed the canonical envelope", () => {
+  assert.equal(typeof validator.validateApproval, "function");
+  const record = loadTemplate("approval_record");
+  const validContext = {
+    now: "2026-07-18T00:00:00Z",
+    action: "production_deployment",
+    actor: "builder-agent",
+  };
+  const mismatches = [
+    { cash_usd: record.limits.cash_usd + 1 },
+    { labor_hours: record.limits.labor_hours + 1 },
+    { duration_days: record.limits.duration_days + 1 },
+    { data_classes: [...record.limits.data_classes, "public"] },
+    { risk_level: "critical" },
+  ];
+
+  for (const limits of mismatches) {
+    assert.equal(
+      validator.validateApproval(record, { ...validContext, limits })
+        .some((issue) => issue.code === "APPROVAL_LIMIT_MISMATCH"),
+      true,
+      JSON.stringify(limits),
+    );
+  }
+});
+
+test("draft experiment requires preregistration but not closure fields", async () => {
+  const draft = loadTemplate("experiment_record");
+  draft.status = "draft";
+  draft.approval_references = [];
+  for (const field of ["actual_cost", "results", "reflection", "outcome", "experience_reference", "confidence_update", "decision_outcome"]) {
+    delete draft[field];
+  }
+  assert.equal(compileSchema("experiment_record")(draft), true);
+});
+
+test("closed validation experiment requires closure and validation outcome", async () => {
+  const closed = loadTemplate("experiment_record");
+  delete closed.validation_outcome;
+  assert.equal(compileSchema("experiment_record")(closed), false);
+  closed.validation_outcome = "passed";
+  assert.equal(compileSchema("experiment_record")(closed), true);
+});
+
+test("decision record carries the target customer", async () => {
+  const decision = loadTemplate("decision_record");
+  delete decision.target_customer;
+  assert.equal(compileSchema("decision_record")(decision), false);
+});
+
 test("record references use declared record identifiers", async () => {
   const policySet = await validator.loadPolicySet(ROOT);
   const record = policySet.templates.get("decision_record");

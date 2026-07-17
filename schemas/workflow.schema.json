@@ -23,13 +23,13 @@
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "items": { "$ref": "#/$defs/identifier" }
+      "items": { "$ref": "#/$defs/fieldPath" }
     },
     "closure_required_fields": {
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "items": { "$ref": "#/$defs/identifier" }
+      "items": { "$ref": "#/$defs/fieldPath" }
     },
     "learning_prototype_exception": {
       "type": "object",
@@ -64,6 +64,7 @@
   ],
   "$defs": {
     "identifier": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "fieldPath": { "type": "string", "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$" },
     "nonemptyStrings": {
       "type": "array",
       "minItems": 1,

@@ -1,0 +1,53 @@
+id: approval-cli-discovery-pipeline-2026-07-17
+record_type: approval_record
+schema_version: 1.0.0
+policy_version: 2.0.0
+created_at: 2026-07-17T19:32:16Z
+updated_at: 2026-07-17T19:32:16Z
+owner: human_authority
+affected_business: genesis-system
+status: active
+evidence_references:
+  - conversation://current/genesis-owner/cli-discovery-pipeline-approval
+  - git://commit/5daa7fc
+  - command://npm-run-check/2026-07-17/pass
+related_records: []
+privacy_classification: internal
+immutable_history_refs:
+  - record://approval-cli-discovery-pipeline-2026-07-17/v1
+approver_role: human_authority
+approver_principal_id: genesis-owner
+requester: codex-agent
+actor: codex-agent
+action_class: protected_action
+scope:
+  actions:
+    - sandboxed_cli_pipeline_implementation
+  wildcard: false
+evidence_snapshot:
+  - model-identity://openai/codex
+  - model-version://gpt-5
+  - tool-context://git-npm-node-subagent-workflow
+  - plan://commit/5daa7fc
+  - reviewer://genesis-owner/analyst
+  - verification://npm-run-check/pass
+limits:
+  cash_usd: 0
+  labor_hours: 8
+  duration_days: 7
+  data_classes: [public, internal]
+  risk_level: high
+decision: approved
+rationale: >-
+  genesis-owner explicitly approved codex-agent to implement the protected,
+  sandboxed Genesis CLI discovery pipeline described by plan commit 5daa7fc.
+  Scope includes Decision and Experiment schema alignment, transition-validator
+  alignment, an offline CLI, immutable local YAML storage, and a rebuildable
+  SQLite projection. The approver acted as Human Authority and analyst reviewer
+  after reviewing the plan and passing npm run check results.
+issued_at: 2026-07-17T19:32:16Z
+effective_at: 2026-07-17T19:32:16Z
+expires_at: 2026-07-24T19:32:16Z
+review_at: 2026-07-21T19:32:16Z
+revoked: false
+revocation_reference: null

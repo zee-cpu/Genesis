@@ -339,32 +339,37 @@ function transitionIssues(policySet, workflowId, from, to, context = {}) {
   return validator.validateTransition(policySet, workflowId, from, to, context);
 }
 
-const COMPLETE_PREREGISTRATION = [
-  "problem",
-  "supported_decision",
-  "hypothesis",
-  "confidence",
-  "evidence",
-  "counterevidence",
-  "baseline",
-  "comparison_method",
-  "metric_formula",
-  "metric_population",
-  "metric_denominator",
-  "metric_data_source",
-  "expected_outcome",
-  "minimum_meaningful_effect",
-  "failure_conditions",
-  "stop_conditions",
-  "maximum_cash",
-  "maximum_labor",
-  "maximum_duration",
-  "maximum_data",
-  "maximum_risk",
-  "owner",
-  "decision_date",
-  "allowed_outcomes",
-];
+async function canonicalRecord(templateId, overrides = {}) {
+  const record = structuredClone((await loadRequiredPolicySet()).templates.get(templateId));
+  return { ...record, ...overrides };
+}
+
+async function activeApproval(action, approverRole = "human_authority", overrides = {}) {
+  return canonicalRecord("approval_record", {
+    status: "active",
+    approver_role: approverRole,
+    actor: "codex-agent",
+    scope: { actions: [action], wildcard: false },
+    decision: "approved",
+    revoked: false,
+    limits: {
+      cash_usd: 0,
+      labor_hours: 24,
+      duration_days: 14,
+      data_classes: ["internal"],
+      risk_level: "high",
+    },
+    issued_at: "2026-07-17T00:00:00Z",
+    effective_at: "2026-07-17T00:00:00Z",
+    expires_at: "2026-07-19T00:00:00Z",
+    review_at: "2026-07-18T00:00:00Z",
+    ...overrides,
+  });
+}
+
+function recordValue(record, fieldPath) {
+  return fieldPath.split(".").reduce((value, field) => value?.[field], record);
+}
 
 test("business and experiment workflows load and pass their schema", async () => {
   const result = await validatePolicySet(ROOT);
@@ -387,6 +392,11 @@ test("Discover may transition to Validate", async () => {
 
 test("Build requires passed validation or a bounded Human-approved learning prototype", async () => {
   const policySet = await loadRequiredPolicySet("business_lifecycle");
+  const passedValidation = await canonicalRecord("experiment_record", {
+    subtype: "validation",
+    status: "closed",
+    validation_outcome: "passed",
+  });
 
   assert.equal(
     transitionIssues(policySet, "business_lifecycle", "validate", "build")
@@ -395,37 +405,51 @@ test("Build requires passed validation or a bounded Human-approved learning prot
   );
   assert.deepEqual(
     transitionIssues(policySet, "business_lifecycle", "validate", "build", {
-      recordTypes: [{ id: "experiment_record", subtype: "validation", status: "passed" }],
-      approvals: [],
-      preregistrationFields: [],
+      records: [passedValidation],
+      now: "2026-07-18T00:00:00Z",
+      actor: "codex-agent",
     }),
     [],
   );
   assert.equal(
     transitionIssues(policySet, "business_lifecycle", "validate", "build", {
-      recordTypes: [],
-      approvals: [{ approver: "human_authority", action: "learning_prototype_exception", valid: true }],
-      preregistrationFields: [],
+      records: [{ ...passedValidation, status: "active" }],
+      approvals: [await activeApproval("learning_prototype_exception")],
       learningPrototype: {
         budgetCapped: true,
         nonProduction: true,
         expiresAt: "2026-07-16T00:00:00Z",
+        limits: {
+          cash_usd: 0,
+          labor_hours: 1,
+          duration_days: 7,
+          data_classes: ["internal"],
+          risk_level: "low",
+        },
       },
-      now: "2026-07-17T00:00:00Z",
+      now: "2026-07-18T00:00:00Z",
+      actor: "codex-agent",
     }).some((error) => error.code === "BUILD_VALIDATION_REQUIRED"),
     true,
   );
   assert.deepEqual(
     transitionIssues(policySet, "business_lifecycle", "validate", "build", {
-      recordTypes: [],
-      approvals: [{ approver: "human_authority", action: "learning_prototype_exception", valid: true }],
-      preregistrationFields: [],
+      records: [],
+      approvals: [await activeApproval("learning_prototype_exception")],
       learningPrototype: {
         budgetCapped: true,
         nonProduction: true,
         expiresAt: "2026-07-31T00:00:00Z",
+        limits: {
+          cash_usd: 0,
+          labor_hours: 1,
+          duration_days: 7,
+          data_classes: ["internal"],
+          risk_level: "low",
+        },
       },
-      now: "2026-07-17T00:00:00Z",
+      now: "2026-07-18T00:00:00Z",
+      actor: "codex-agent",
     }),
     [],
   );
@@ -440,9 +464,9 @@ test("Build may transition to Launch only with Human Authority approval", async 
   );
   assert.deepEqual(
     transitionIssues(policySet, "business_lifecycle", "build", "launch", {
-      recordTypes: [],
-      approvals: [{ approver: "human_authority", action: "launch", valid: true }],
-      preregistrationFields: [],
+      approvals: [await activeApproval("launch")],
+      now: "2026-07-18T00:00:00Z",
+      actor: "codex-agent",
     }),
     [],
   );
@@ -469,29 +493,54 @@ test("Draft cannot transition directly to Running", async () => {
 
 test("experiment Approval requires its approver and complete preregistration", async () => {
   const policySet = await loadRequiredPolicySet("experiment_lifecycle");
-  const approval = [{ approver: "ceo", action: "experiment", valid: true }];
+  const workflow = policySet.policies.get("experiment_lifecycle");
+  const draft = await canonicalRecord("experiment_record", {
+    status: "draft", approval_references: [],
+  });
+  const approval = await activeApproval("experiment", "ceo");
+
+  assert.deepEqual(
+    workflow.preregistration_required_fields
+      .filter((field) => recordValue(draft, field) === undefined),
+    [],
+  );
 
   assert.equal(
     transitionIssues(policySet, "experiment_lifecycle", "approval", "running", {
-      recordTypes: [],
-      approvals: approval,
-      preregistrationFields: COMPLETE_PREREGISTRATION.slice(1),
+      experimentRecord: { ...draft, problem: "" },
+      approvals: [approval],
+      now: "2026-07-18T00:00:00Z",
+      actor: "codex-agent",
     }).some((error) => error.code === "EXPERIMENT_PREREGISTRATION_INCOMPLETE"),
     true,
   );
   assert.equal(
     transitionIssues(policySet, "experiment_lifecycle", "approval", "running", {
-      recordTypes: [],
-      approvals: [],
-      preregistrationFields: COMPLETE_PREREGISTRATION,
+      experimentRecord: draft,
+      approvals: [await activeApproval("experiment", "ceo", {
+        expires_at: "2026-07-18T00:00:00Z",
+        review_at: "2026-07-17T12:00:00Z",
+      })],
+      now: "2026-07-18T00:00:00Z",
+      actor: "codex-agent",
+    }).some((error) => error.code === "EXPERIMENT_PREREGISTRATION_INCOMPLETE"),
+    true,
+  );
+  assert.equal(
+    transitionIssues(policySet, "experiment_lifecycle", "approval", "running", {
+      experimentRecord: draft,
+      approvals: [approval],
+      now: "2026-07-18T00:00:00Z",
+      actor: "other-agent",
     }).some((error) => error.code === "EXPERIMENT_PREREGISTRATION_INCOMPLETE"),
     true,
   );
   assert.deepEqual(
     transitionIssues(policySet, "experiment_lifecycle", "approval", "running", {
-      recordTypes: [],
-      approvals: approval,
-      preregistrationFields: COMPLETE_PREREGISTRATION,
+      experimentRecord: draft,
+      approvals: [approval],
+      now: "2026-07-18T00:00:00Z",
+      actor: "codex-agent",
     }),
     [],
   );
@@ -499,17 +548,28 @@ test("experiment Approval requires its approver and complete preregistration", a
 
 test("experiment closure requires actuals, reflection, decision, and Experience linkage", async () => {
   const policySet = await loadRequiredPolicySet("experiment_lifecycle");
-  const required = policySet.policies.get("experiment_lifecycle").closure_required_fields;
+  const workflow = policySet.policies.get("experiment_lifecycle");
+  const closed = await canonicalRecord("experiment_record", {
+    subtype: "validation",
+    status: "closed",
+    validation_outcome: "passed",
+  });
+
+  assert.deepEqual(
+    workflow.closure_required_fields
+      .filter((field) => recordValue(closed, field) === undefined),
+    [],
+  );
 
   assert.equal(
     transitionIssues(policySet, "experiment_lifecycle", "decision", "closed", {
-      closureFields: required.slice(1),
+      experimentRecord: { ...closed, reflection: "" },
     }).some((error) => error.code === "WORKFLOW_TRANSITION_INVALID"),
     true,
   );
   assert.deepEqual(
     transitionIssues(policySet, "experiment_lifecycle", "decision", "closed", {
-      closureFields: required,
+      experimentRecord: closed,
     }),
     [],
   );
@@ -544,7 +604,7 @@ test("forbidden-transition fixture is rejected", async () => {
       "experiment_lifecycle",
       fixture.from,
       fixture.to,
-      { recordTypes: [], approvals: [], preregistrationFields: [] },
+      {},
     )
       .filter((error) => error.code === "WORKFLOW_TRANSITION_INVALID")
       .map(({ code }) => ({ code })),

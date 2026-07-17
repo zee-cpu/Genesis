@@ -470,13 +470,43 @@ function workflowState(workflow, stateId) {
   return workflow?.states?.find((state) => state.id === stateId);
 }
 
-function validApproval(approvals, approver, action) {
-  return typeof approver === "string" && Array.isArray(approvals) && approvals.some((approval) => (
-    approval
-    && approval.approver === approver
-    && approval.valid === true
-    && (action === undefined || approval.action === action)
+function matchingApproval(approvals, { approverRole, action, actor, now, limits }) {
+  return Array.isArray(approvals) && approvals.some((approval) => (
+    approval?.approver_role === approverRole
+    && validateApproval(approval, { now, action, actor, limits }).length === 0
   ));
+}
+
+function recordPathValue(record, fieldPath) {
+  return fieldPath.split(".").reduce((value, field) => value?.[field], record);
+}
+
+function hasRecordValue(record, fieldPath) {
+  const value = recordPathValue(record, fieldPath);
+  if (value === null || value === undefined) {
+    return false;
+  }
+  if (typeof value === "string") {
+    return value.trim().length > 0;
+  }
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+  return true;
+}
+
+function validatesRecordSchema(policySet, recordId, record) {
+  const schemaPath = policySet.schemaFiles.record_templates.get(recordId);
+  if (!schemaPath || !record || typeof record !== "object") {
+    return false;
+  }
+  try {
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    addFormats(ajv);
+    return ajv.compile(loadJsonFile(schemaPath))(record);
+  } catch {
+    return false;
+  }
 }
 
 export function validateTransition(policySet, workflowId, from, to, context = {}) {
@@ -498,22 +528,22 @@ export function validateTransition(policySet, workflowId, from, to, context = {}
   }
 
   if (workflowId === "business_lifecycle" && from === "validate" && to === "build") {
-    const passedValidation = Array.isArray(context.recordTypes)
-      && context.recordTypes.some((record) => (
-        record
-        && typeof record === "object"
-        && record.id === "experiment_record"
-        && record.subtype === "validation"
-        && record.status === "passed"
-      ));
+    const passedValidation = context.records?.some((record) => (
+      record?.record_type === "experiment_record"
+      && record.subtype === "validation"
+      && record.status === "closed"
+      && record.validation_outcome === "passed"
+    ));
     const prototype = context.learningPrototype;
     const now = Date.parse(context.now ?? new Date().toISOString());
     const expiry = Date.parse(prototype?.expiresAt);
-    const validException = validApproval(
-      context.approvals,
-      "human_authority",
-      "learning_prototype_exception",
-    )
+    const validException = matchingApproval(context.approvals, {
+      approverRole: "human_authority",
+      action: "learning_prototype_exception",
+      actor: context.actor,
+      now: context.now,
+      limits: prototype?.limits,
+    })
       && prototype?.budgetCapped === true
       && prototype?.nonProduction === true
       && Number.isFinite(expiry)
@@ -534,7 +564,12 @@ export function validateTransition(policySet, workflowId, from, to, context = {}
     workflowId === "business_lifecycle"
     && from === "build"
     && to === "launch"
-    && !validApproval(context.approvals, "human_authority", "launch")
+    && !matchingApproval(context.approvals, {
+      approverRole: "human_authority",
+      action: "launch",
+      actor: context.actor,
+      now: context.now,
+    })
   ) {
     errors.push(issue(
       "LAUNCH_HUMAN_APPROVAL_REQUIRED",
@@ -545,12 +580,20 @@ export function validateTransition(policySet, workflowId, from, to, context = {}
   }
 
   if (workflowId === "experiment_lifecycle" && from === "approval" && to === "running") {
+    const experimentRecord = context.experimentRecord;
     const requiredFields = workflow.preregistration_required_fields ?? [];
-    const suppliedFields = new Set(context.preregistrationFields ?? []);
-    const missingFields = requiredFields.filter((field) => !suppliedFields.has(field));
+    const missingFields = requiredFields.filter((field) => !hasRecordValue(experimentRecord, field));
     const requiredApprover = policySet.policies
       .get("decision_policy")?.classes?.[fromState.approval_class]?.required_approver;
-    if (missingFields.length > 0 || !validApproval(context.approvals, requiredApprover, "experiment")) {
+    const recordValid = validatesRecordSchema(policySet, "experiment_record", experimentRecord);
+    const approvalValid = matchingApproval(context.approvals, {
+      approverRole: requiredApprover,
+      action: "experiment",
+      actor: context.actor,
+      now: context.now,
+      limits: experimentRecord?.limits,
+    });
+    if (missingFields.length > 0 || !recordValid || !approvalValid) {
       errors.push(issue(
         "EXPERIMENT_PREREGISTRATION_INCOMPLETE",
         source,
@@ -561,15 +604,18 @@ export function validateTransition(policySet, workflowId, from, to, context = {}
   }
 
   if (workflowId === "experiment_lifecycle" && from === "decision" && to === "closed") {
-    const suppliedFields = new Set(context.closureFields ?? []);
+    const experimentRecord = context.experimentRecord;
     const missingFields = (workflow.closure_required_fields ?? [])
-      .filter((field) => !suppliedFields.has(field));
-    if (missingFields.length > 0) {
+      .filter((field) => !hasRecordValue(experimentRecord, field));
+    const canonicalClosedRecord = experimentRecord?.record_type === "experiment_record"
+      && experimentRecord.status === "closed"
+      && validatesRecordSchema(policySet, "experiment_record", experimentRecord);
+    if (missingFields.length > 0 || !canonicalClosedRecord) {
       errors.push(issue(
         "WORKFLOW_TRANSITION_INVALID",
         source,
         `/states/${fromIndex}/next_states`,
-        `experiment closure is incomplete; missing: ${missingFields.join(", ")}`,
+        `experiment closure is incomplete; missing: ${missingFields.join(", ") || "none"}`,
       ));
     }
   }
@@ -691,10 +737,10 @@ export function validateWorkflows(policySet) {
     if (workflowId === "experiment_lifecycle") {
       const required = [
         "problem", "supported_decision", "hypothesis", "confidence", "evidence",
-        "counterevidence", "baseline", "comparison_method", "metric_formula",
-        "metric_population", "metric_denominator", "metric_data_source", "expected_outcome",
-        "minimum_meaningful_effect", "failure_conditions", "stop_conditions", "maximum_cash",
-        "maximum_labor", "maximum_duration", "maximum_data", "maximum_risk", "owner",
+        "counterevidence", "baseline", "comparison_method", "metric.formula",
+        "metric.population", "metric.denominator", "metric.data_source", "expected_outcome",
+        "minimum_meaningful_effect", "failure_conditions", "stop_conditions", "limits.cash_usd",
+        "limits.labor_hours", "limits.duration_days", "limits.data_classes", "limits.risk_level", "owner",
         "decision_date", "allowed_outcomes",
       ];
       const configured = new Set(workflow.preregistration_required_fields ?? []);
@@ -709,7 +755,7 @@ export function validateWorkflows(policySet) {
       }
       const requiredClosureFields = [
         "actual_cost", "outcome", "reflection", "confidence_update", "decision_outcome",
-        "linked_experience_record",
+        "experience_reference",
       ];
       const configuredClosureFields = new Set(workflow.closure_required_fields ?? []);
       const missingClosureFields = requiredClosureFields
@@ -909,7 +955,55 @@ function parseApprovalDate(value) {
   return Date.parse(value);
 }
 
-export function validateApproval(record, { now, action, actor }) {
+function approvalLimitsExceeded(approved, requested) {
+  if (requested === undefined) {
+    return false;
+  }
+  if (!requested || typeof requested !== "object" || Array.isArray(requested)) {
+    return true;
+  }
+
+  const knownFields = new Set([
+    "cash_usd", "labor_hours", "duration_days", "data_classes", "risk_level",
+  ]);
+  if (Object.keys(requested).some((field) => !knownFields.has(field))) {
+    return true;
+  }
+
+  for (const field of ["cash_usd", "labor_hours", "duration_days"]) {
+    if (requested[field] !== undefined && (
+      !Number.isFinite(requested[field])
+      || requested[field] < 0
+      || !Number.isFinite(approved?.[field])
+      || requested[field] > approved[field]
+    )) {
+      return true;
+    }
+  }
+
+  if (requested.data_classes !== undefined && (
+    !Array.isArray(requested.data_classes)
+    || !Array.isArray(approved?.data_classes)
+    || requested.data_classes.some((dataClass) => (
+      typeof dataClass !== "string" || !approved.data_classes.includes(dataClass)
+    ))
+  )) {
+    return true;
+  }
+
+  if (requested.risk_level !== undefined) {
+    const riskOrder = ["low", "medium", "high", "critical"];
+    const requestedRisk = riskOrder.indexOf(requested.risk_level);
+    const approvedRisk = riskOrder.indexOf(approved?.risk_level);
+    if (requestedRisk < 0 || approvedRisk < 0 || requestedRisk > approvedRisk) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export function validateApproval(record, { now, action, actor, limits }) {
   const errors = [];
 
   if (record?.revoked === true) {
@@ -964,6 +1058,14 @@ export function validateApproval(record, { now, action, actor }) {
       "APPROVAL_ACTOR_MISMATCH",
       "/actor",
       `approval actor ${record?.actor ?? "missing"} does not match ${actor}`,
+    ));
+  }
+
+  if (approvalLimitsExceeded(record?.limits, limits)) {
+    errors.push(approvalIssue(
+      "APPROVAL_LIMIT_MISMATCH",
+      "/limits",
+      "requested limits exceed or do not match the approved envelope",
     ));
   }
 
