@@ -17,7 +17,30 @@ function privacy(input) {
   return input.privacy_classification ?? "internal";
 }
 
-export function buildEvidenceEntry(input, clock) {
+function resolveRegistry(options = {}) {
+  if (options.registry) {
+    return options.registry;
+  }
+
+  if (options.repoRoot) {
+    return createSchemaRegistry(options.repoRoot);
+  }
+
+  return registry;
+}
+
+function rejectRestrictedExperimentData(limits) {
+  if (limits?.data_classes?.includes("restricted")) {
+    throw new GenesisError("SENSITIVE_DATA_FORBIDDEN", "Restricted experiment data is forbidden", {
+      path: "/limits/data_classes",
+      correction: "Remove restricted from experiment data_classes and keep the workflow within public or internal data",
+      escalation: "human_authority",
+    });
+  }
+}
+
+export function buildEvidenceEntry(input, clock, options = {}) {
+  const activeRegistry = resolveRegistry(options);
   if (privacy(input) === "restricted") {
     throw new GenesisError("SENSITIVE_DATA_FORBIDDEN", "Restricted evidence is forbidden", {
       path: "/privacy_classification",
@@ -37,10 +60,11 @@ export function buildEvidenceEntry(input, clock) {
     privacy_classification: privacy(input),
   };
 
-  return registry.validateEvidence(evidence);
+  return activeRegistry.validateEvidence(evidence);
 }
 
-export function buildDecisionRecord(input, clock) {
+export function buildDecisionRecord(input, clock, options = {}) {
+  const activeRegistry = resolveRegistry(options);
   const businessId = normalizeBusinessId(input.business_id);
   const id = `${businessId}-decision`;
   const now = timestamp(clock);
@@ -75,10 +99,11 @@ export function buildDecisionRecord(input, clock) {
     confidence_update: null,
   };
 
-  return registry.validateRecord("decision_record", decision);
+  return activeRegistry.validateRecord("decision_record", decision);
 }
 
-export function versionDecisionRecord(previous, changes, historyRef, clock) {
+export function versionDecisionRecord(previous, changes, historyRef, clock, options = {}) {
+  const activeRegistry = resolveRegistry(options);
   const decision = {
     ...previous,
     ...changes,
@@ -95,13 +120,15 @@ export function versionDecisionRecord(previous, changes, historyRef, clock) {
     ])],
   };
 
-  return registry.validateRecord("decision_record", decision);
+  return activeRegistry.validateRecord("decision_record", decision);
 }
 
-export function buildExperimentRecord(input, clock) {
+export function buildExperimentRecord(input, clock, options = {}) {
+  const activeRegistry = resolveRegistry(options);
   const businessId = normalizeBusinessId(input.business_id);
   const id = `${businessId}-experiment`;
   const now = timestamp(clock);
+  rejectRestrictedExperimentData(input.limits);
   const experiment = {
     id,
     record_type: "experiment_record",
@@ -138,5 +165,5 @@ export function buildExperimentRecord(input, clock) {
     approval_references: [],
   };
 
-  return registry.validateRecord("experiment_record", experiment);
+  return activeRegistry.validateRecord("experiment_record", experiment);
 }

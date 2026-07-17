@@ -9,7 +9,9 @@ import { GenesisError } from "./errors.mjs";
 
 function resolveInsideRepo(repoRoot, relativePath) {
   const resolved = path.resolve(repoRoot, relativePath);
-  if (resolved !== repoRoot && !resolved.startsWith(`${repoRoot}${path.sep}`)) {
+  const rootReal = fs.realpathSync(repoRoot);
+  const resolvedReal = fs.realpathSync(resolved);
+  if (resolvedReal !== rootReal && !resolvedReal.startsWith(`${rootReal}${path.sep}`)) {
     throw new GenesisError("RECORD_SCHEMA_INVALID", "Record failed its registered schema", {
       path: "/record_templates",
       correction: `schema path must remain inside the repository: ${relativePath}`,
@@ -33,9 +35,15 @@ function readManifest(manifestPath) {
 
 function validationError(errors) {
   const ajvErrors = errors ?? [];
+  const first = ajvErrors[0];
   return new GenesisError("RECORD_SCHEMA_INVALID", "Record failed its registered schema", {
-    path: ajvErrors[0]?.instancePath ?? "",
-    correction: ajvErrors.map((error) => error.message ?? error.keyword).join("; "),
+    path: first?.instancePath ?? "",
+    correction: ajvErrors.map((error) => {
+      const extra = error.keyword === "additionalProperties" && error.params?.additionalProperty
+        ? ` (unexpected ${error.params.additionalProperty})`
+        : "";
+      return `${error.instancePath || "/"} ${error.keyword}${extra}: ${error.message ?? "invalid value"}`;
+    }).join("; "),
     escalation: "builder",
   });
 }

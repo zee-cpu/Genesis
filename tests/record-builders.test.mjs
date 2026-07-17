@@ -144,4 +144,53 @@ test("builders reject restricted evidence and schema-invalid records", () => {
       && error.correction.includes("must be <= 1")
       && error.escalation === "builder",
   );
+
+  assert.throws(
+    () => buildExperimentRecord({
+      ...validExperimentInput,
+      limits: {
+        ...validExperimentInput.limits,
+        data_classes: ["internal", "restricted"],
+      },
+    }, clock),
+    (error) => error instanceof GenesisError
+      && error.code === "SENSITIVE_DATA_FORBIDDEN"
+      && error.path === "/limits/data_classes"
+      && error.correction.includes("restricted"),
+  );
+});
+
+test("builders can validate against an injected registry", () => {
+  let evidenceCalls = 0;
+  let recordCalls = 0;
+  const injectedRegistry = {
+    validateEvidence(value) {
+      evidenceCalls += 1;
+      return value;
+    },
+    validateRecord(recordType, value) {
+      recordCalls += 1;
+      return { recordType, value };
+    },
+  };
+
+  const evidence = buildEvidenceEntry({
+    id: "bakery-ev-003",
+    business_id: "bakery",
+    source_reference: "interview://owner-2",
+    summary: "Injected registry evidence",
+    stance: "support",
+    provenance: "User-entered note",
+    privacy_classification: "internal",
+  }, clock, { registry: injectedRegistry });
+
+  assert.equal(evidenceCalls, 1);
+  assert.equal(evidence.privacy_classification, "internal");
+
+  const decision = buildDecisionRecord(validDecisionInput, clock, { registry: injectedRegistry });
+  const experiment = buildExperimentRecord(validExperimentInput, clock, { registry: injectedRegistry });
+
+  assert.equal(recordCalls, 2);
+  assert.equal(decision.recordType, "decision_record");
+  assert.equal(experiment.recordType, "experiment_record");
 });
