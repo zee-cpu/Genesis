@@ -453,6 +453,20 @@ test("Build requires passed validation or a bounded Human-approved learning prot
     }),
     [],
   );
+  assert.equal(
+    transitionIssues(policySet, "business_lifecycle", "validate", "build", {
+      records: [],
+      approvals: [await activeApproval("learning_prototype_exception")],
+      learningPrototype: {
+        budgetCapped: true,
+        nonProduction: true,
+        expiresAt: "2026-07-31T00:00:00Z",
+      },
+      now: "2026-07-18T00:00:00Z",
+      actor: "codex-agent",
+    }).some((error) => error.code === "BUILD_VALIDATION_REQUIRED"),
+    true,
+  );
 });
 
 test("Build may transition to Launch only with Human Authority approval", async () => {
@@ -470,6 +484,25 @@ test("Build may transition to Launch only with Human Authority approval", async 
     }),
     [],
   );
+
+  for (const mutate of [
+    (approval) => { approval.status = "draft"; },
+    (approval) => { approval.status = "closed"; },
+    (approval) => { approval.status = "superseded"; },
+    (approval) => { delete approval.status; },
+    (approval) => { approval.record_type = "decision_record"; },
+  ]) {
+    const approval = await activeApproval("launch");
+    mutate(approval);
+    assert.equal(
+      transitionIssues(policySet, "business_lifecycle", "build", "launch", {
+        approvals: [approval],
+        now: "2026-07-18T00:00:00Z",
+        actor: "codex-agent",
+      }).some((error) => error.code === "LAUNCH_HUMAN_APPROVAL_REQUIRED"),
+      true,
+    );
+  }
 });
 
 test("Review supports every approved terminal business outcome", async () => {

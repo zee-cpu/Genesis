@@ -24,7 +24,7 @@
     "failure_conditions": { "$ref": "#/$defs/nonemptyRefs" }, "stop_conditions": { "$ref": "#/$defs/nonemptyRefs" },
     "limits": {
       "type": "object", "additionalProperties": false, "required": ["cash_usd", "labor_hours", "duration_days", "data_classes", "risk_level"],
-      "properties": { "cash_usd": { "type": "number", "minimum": 0 }, "labor_hours": { "type": "number", "minimum": 0 }, "duration_days": { "type": "integer", "minimum": 0 }, "data_classes": { "$ref": "#/$defs/nonemptyRefs" }, "risk_level": { "enum": ["low", "medium", "high", "critical"] } }
+      "properties": { "cash_usd": { "type": "number", "minimum": 0 }, "labor_hours": { "type": "number", "minimum": 0 }, "duration_days": { "type": "integer", "minimum": 0 }, "data_classes": { "$ref": "#/$defs/dataClasses" }, "risk_level": { "enum": ["low", "medium", "high", "critical"] } }
     },
     "decision_date": { "$ref": "#/$defs/dateTime" },
     "allowed_outcomes": { "const": ["scale", "pivot", "learning_lab", "archive", "kill"] },
@@ -67,6 +67,7 @@
     "recordRefs": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/recordRef" } },
     "nonemptyRecordRefs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/recordRef" } },
     "nonemptyRefs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/nonempty" } },
+    "dataClasses": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/privacy" } },
     "privacy": { "enum": ["public", "internal", "confidential", "restricted"] }
   }
 }

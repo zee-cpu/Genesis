@@ -133,6 +133,44 @@ test("approval scope and actor match exactly", () => {
   );
 });
 
+test("only active canonical approval records validate", () => {
+  const validContext = {
+    now: "2026-07-18T00:00:00Z",
+    action: "production_deployment",
+    actor: "builder-agent",
+  };
+
+  for (const status of ["draft", "closed", "superseded"]) {
+    const record = loadTemplate("approval_record");
+    record.status = status;
+    assert.equal(
+      validator.validateApproval(record, validContext).some((issue) => (
+        issue.code === "APPROVAL_STATUS_INVALID" && issue.path === "/status"
+      )),
+      true,
+      status,
+    );
+  }
+
+  const statusless = loadTemplate("approval_record");
+  delete statusless.status;
+  assert.equal(
+    validator.validateApproval(statusless, validContext).some((issue) => (
+      issue.code === "APPROVAL_STATUS_INVALID" && issue.path === "/status"
+    )),
+    true,
+  );
+
+  const noncanonical = loadTemplate("approval_record");
+  noncanonical.record_type = "decision_record";
+  assert.equal(
+    validator.validateApproval(noncanonical, validContext).some((issue) => (
+      issue.code === "APPROVAL_RECORD_INVALID" && issue.path === "/record_type"
+    )),
+    true,
+  );
+});
+
 test("approval limits cannot exceed the canonical envelope", () => {
   assert.equal(typeof validator.validateApproval, "function");
   const record = loadTemplate("approval_record");
@@ -146,6 +184,7 @@ test("approval limits cannot exceed the canonical envelope", () => {
     { labor_hours: record.limits.labor_hours + 1 },
     { duration_days: record.limits.duration_days + 1 },
     { data_classes: [...record.limits.data_classes, "public"] },
+    { data_classes: ["unknown"] },
     { risk_level: "critical" },
   ];
 
@@ -156,6 +195,23 @@ test("approval limits cannot exceed the canonical envelope", () => {
       true,
       JSON.stringify(limits),
     );
+  }
+
+  const unknownApprovedClass = loadTemplate("approval_record");
+  unknownApprovedClass.limits.data_classes = ["unknown"];
+  assert.equal(
+    validator.validateApproval(unknownApprovedClass, validContext)
+      .some((issue) => issue.code === "APPROVAL_LIMIT_MISMATCH"),
+    true,
+  );
+});
+
+test("approval and experiment limit data classes use the privacy enum", () => {
+  for (const recordId of ["approval_record", "experiment_record"]) {
+    const record = loadTemplate(recordId);
+    record.limits.data_classes = ["unknown"];
+    const validate = compileSchema(recordId);
+    assert.equal(validate(record), false, recordId);
   }
 });
 

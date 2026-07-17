@@ -477,6 +477,31 @@ function matchingApproval(approvals, { approverRole, action, actor, now, limits 
   ));
 }
 
+const APPROVAL_LIMIT_FIELDS = [
+  "cash_usd", "labor_hours", "duration_days", "data_classes", "risk_level",
+];
+const DATA_CLASSES = new Set(["public", "internal", "confidential", "restricted"]);
+const RISK_LEVELS = ["low", "medium", "high", "critical"];
+
+function completeBoundedLimits(limits) {
+  return limits !== null
+    && typeof limits === "object"
+    && !Array.isArray(limits)
+    && APPROVAL_LIMIT_FIELDS.every((field) => Object.hasOwn(limits, field))
+    && Object.keys(limits).every((field) => APPROVAL_LIMIT_FIELDS.includes(field))
+    && Number.isFinite(limits.cash_usd)
+    && limits.cash_usd >= 0
+    && Number.isFinite(limits.labor_hours)
+    && limits.labor_hours >= 0
+    && Number.isInteger(limits.duration_days)
+    && limits.duration_days >= 0
+    && Array.isArray(limits.data_classes)
+    && limits.data_classes.length > 0
+    && new Set(limits.data_classes).size === limits.data_classes.length
+    && limits.data_classes.every((dataClass) => DATA_CLASSES.has(dataClass))
+    && RISK_LEVELS.includes(limits.risk_level);
+}
+
 function recordPathValue(record, fieldPath) {
   return fieldPath.split(".").reduce((value, field) => value?.[field], record);
 }
@@ -537,13 +562,14 @@ export function validateTransition(policySet, workflowId, from, to, context = {}
     const prototype = context.learningPrototype;
     const now = Date.parse(context.now ?? new Date().toISOString());
     const expiry = Date.parse(prototype?.expiresAt);
-    const validException = matchingApproval(context.approvals, {
-      approverRole: "human_authority",
-      action: "learning_prototype_exception",
-      actor: context.actor,
-      now: context.now,
-      limits: prototype?.limits,
-    })
+    const validException = completeBoundedLimits(prototype?.limits)
+      && matchingApproval(context.approvals, {
+        approverRole: "human_authority",
+        action: "learning_prototype_exception",
+        actor: context.actor,
+        now: context.now,
+        limits: prototype?.limits,
+      })
       && prototype?.budgetCapped === true
       && prototype?.nonProduction === true
       && Number.isFinite(expiry)
@@ -955,7 +981,34 @@ function parseApprovalDate(value) {
   return Date.parse(value);
 }
 
+let approvalRecordValidator;
+
+function validateCanonicalApprovalRecord(record) {
+  if (!approvalRecordValidator) {
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    addFormats(ajv);
+    approvalRecordValidator = ajv.compile(loadJsonFile(
+      new URL("../schemas/records/approval-record.schema.json", import.meta.url),
+    ));
+  }
+  return approvalRecordValidator(record);
+}
+
+function approvalSchemaErrorPath(error) {
+  if (error?.keyword === "required") {
+    return `${error.instancePath}/${error.params.missingProperty}`;
+  }
+  return error?.instancePath || "/";
+}
+
 function approvalLimitsExceeded(approved, requested) {
+  if (
+    !Array.isArray(approved?.data_classes)
+    || approved.data_classes.length === 0
+    || approved.data_classes.some((dataClass) => !DATA_CLASSES.has(dataClass))
+  ) {
+    return true;
+  }
   if (requested === undefined) {
     return false;
   }
@@ -963,9 +1016,7 @@ function approvalLimitsExceeded(approved, requested) {
     return true;
   }
 
-  const knownFields = new Set([
-    "cash_usd", "labor_hours", "duration_days", "data_classes", "risk_level",
-  ]);
+  const knownFields = new Set(APPROVAL_LIMIT_FIELDS);
   if (Object.keys(requested).some((field) => !knownFields.has(field))) {
     return true;
   }
@@ -985,16 +1036,15 @@ function approvalLimitsExceeded(approved, requested) {
     !Array.isArray(requested.data_classes)
     || !Array.isArray(approved?.data_classes)
     || requested.data_classes.some((dataClass) => (
-      typeof dataClass !== "string" || !approved.data_classes.includes(dataClass)
+      !DATA_CLASSES.has(dataClass) || !approved.data_classes.includes(dataClass)
     ))
   )) {
     return true;
   }
 
   if (requested.risk_level !== undefined) {
-    const riskOrder = ["low", "medium", "high", "critical"];
-    const requestedRisk = riskOrder.indexOf(requested.risk_level);
-    const approvedRisk = riskOrder.indexOf(approved?.risk_level);
+    const requestedRisk = RISK_LEVELS.indexOf(requested.risk_level);
+    const approvedRisk = RISK_LEVELS.indexOf(approved?.risk_level);
     if (requestedRisk < 0 || approvedRisk < 0 || requestedRisk > approvedRisk) {
       return true;
     }
@@ -1011,6 +1061,23 @@ export function validateApproval(record, { now, action, actor, limits }) {
       "APPROVAL_REVOKED",
       "/revoked",
       `approval is revoked${record.revocation_reference ? `: ${record.revocation_reference}` : ""}`,
+    ));
+  }
+
+  if (!validateCanonicalApprovalRecord(record)) {
+    const schemaError = approvalRecordValidator.errors?.[0];
+    errors.push(approvalIssue(
+      "APPROVAL_RECORD_INVALID",
+      approvalSchemaErrorPath(schemaError),
+      "approval must match the canonical Approval Record schema",
+    ));
+  }
+
+  if (record?.status !== "active") {
+    errors.push(approvalIssue(
+      "APPROVAL_STATUS_INVALID",
+      "/status",
+      "approval status must be active",
     ));
   }
 
