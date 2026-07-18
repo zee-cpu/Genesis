@@ -1,0 +1,47 @@
+id: approval-pages-deployment-2026-07-18
+record_type: approval_record
+schema_version: 1.0.0
+policy_version: 2.0.0
+created_at: 2026-07-18T18:01:13.637Z
+updated_at: 2026-07-18T18:01:13.637Z
+owner: human_authority
+affected_business: agentic-digital-assets
+status: active
+evidence_references:
+  - src/experiments/001-asset-engine/public/agentic-digital-assets.manifest.json
+related_records:
+  - agentic-digital-assets-experiment
+  - agentic-digital-assets-experiment-approval
+privacy_classification: public
+immutable_history_refs:
+  - records/approvals/approval-pages-deployment-2026-07-18.yaml
+approver_role: human_authority
+approver_principal_id: genesis-owner
+requester: lead-developer
+actor: operator
+action_class: protected_action
+scope:
+  actions:
+    - production_change:github_pages:zee-cpu/Genesis
+    - public_representation:agentic-digital-assets.manifest.json
+  wildcard: false
+evidence_snapshot:
+  - src/experiments/001-asset-engine/public/agentic-digital-assets.manifest.json
+limits:
+  cash_usd: 0
+  labor_hours: 1
+  duration_days: 1
+  data_classes:
+    - public
+  risk_level: high
+decision: approved
+rationale: >-
+  Authorizing a public Git-driven deployment using GitHub Pages to expose the
+  generated JSON manifest endpoint for passive asset retrieval. The
+  lead-developer is authorized to act as operator for this execution scope.
+issued_at: 2026-07-18T18:01:13.637Z
+effective_at: 2026-07-18T18:01:13.637Z
+expires_at: 2026-07-25T17:37:16Z
+review_at: 2026-07-24T17:00:00Z
+revoked: false
+revocation_reference: null

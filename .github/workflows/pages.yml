@@ -1,0 +1,75 @@
+name: Deploy Agentic Digital Assets
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/pages.yml
+      - src/experiments/001-asset-engine/public/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate public manifest
+        run: >-
+          node --input-type=module -e '
+          import { readFile } from "node:fs/promises";
+          const path = "src/experiments/001-asset-engine/public/agentic-digital-assets.manifest.json";
+          const manifest = JSON.parse(await readFile(path, "utf8"));
+          if (manifest.package_id !== "agentic-digital-assets"
+          || manifest.asset_count !== 5
+          || manifest.assets?.length !== 5
+          || manifest.network_boundary?.status !== "offline_verified"
+          || manifest.network_boundary?.external_requests !== 0) {
+          throw new Error("Public manifest validation failed");
+          }
+          console.log("Validated 5 offline assets");'
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Stage static Pages artifact
+        run: |
+          mkdir -p _site
+          cp src/experiments/001-asset-engine/public/agentic-digital-assets.manifest.json _site/
+          printf '%s\n' \
+            '<!doctype html>' \
+            '<html lang="en"><meta charset="utf-8">' \
+            '<title>Agentic Digital Assets</title>' \
+            '<h1>Agentic Digital Assets</h1>' \
+            '<p><a href="agentic-digital-assets.manifest.json">Open JSON manifest</a></p>' \
+            > _site/index.html
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v4
