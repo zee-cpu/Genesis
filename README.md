@@ -371,6 +371,7 @@ This validates every canonical YAML record and replaces the SQLite projection wi
 |---|---|---:|---|
 | `genesis start-business` | Create an opportunity, its first decision, and initial evidence | Yes, after confirmation | `discover` |
 | `genesis start-follow-up <business-id>` | Create a separately governed follow-up after a closed `pivot` or `scale` | Yes, after confirmation | New business in `discover` |
+| `genesis start-learning-lab <business-id>` | Allocate a bounded Learning Lab after a closed, failed initiative classified `learning_lab` | Yes, after confirmation | New business in `discover` |
 | `genesis add-evidence <business-id>` | Add evidence and version the associated decision | Yes, after confirmation | `discover` |
 | `genesis status <business-id>` | Show state, gates, metrics, limits, blocked commands, and projection health | No | Unchanged |
 | `genesis next <business-id>` | Explain the projected state and guide the next valid transition one question at a time | Only when the guided proposal is confirmed | Depends on current state |
@@ -465,7 +466,7 @@ Genesis creates `.genesis/workspace.lock` with exclusive creation while it reads
 - preregistration completeness ratio; and
 - confidence history across decision versions.
 
-`genesis next <business-id>` is the operator-oriented companion to status. It fails closed when the projection is missing or inconsistent, derives safe values such as supported-decision references and approval timestamps, and routes the resulting proposal through the same schema, approval, append-only storage, and projection checks as the direct commands.
+`genesis next <business-id>` is the operator-oriented companion to status. It fails closed when the projection is missing or inconsistent, derives safe values such as supported-decision references and approval timestamps, and routes the resulting proposal through the same schema, approval, append-only storage, and projection checks as the direct commands. A closed failed initiative classified `learning_lab` is routed to a new child opportunity with its own budget, owner, learning metric, monthly review, and expiry. It inherits no approval or execution authority, and its experiment still requires normal preregistration and Human Authority approval.
 
 These are early workflow metrics, not proof that a business is viable. The broader normative metric definitions live in [`config/metrics-policy.yaml`](config/metrics-policy.yaml).
 
@@ -698,7 +699,7 @@ Current technical boundaries include:
 - the `active` transition records authorization state but does not run experiment tasks;
 - execution and measurement are operator-entered evidence; Genesis does not infer or fabricate results;
 - an approved `scale`, `pivot`, or other outcome is a classification decision only; it grants no permission to execute follow-on work;
-- generic follow-up is limited to closed `pivot` and `scale` outcomes; `learning_lab` requires a dedicated governed record that is not yet implemented;
+- generic follow-up is limited to closed `pivot` and `scale` outcomes; Learning Lab continuation is limited to a real failed initiative and must fit its separately recorded budget, owner, metric, monthly review, and expiry;
 - no automatic metric ingestion from customer or operating systems;
 - no authentication, encryption layer, remote backup, or sync;
 - no packaged npm release—the supported installation path is this repository plus `npm link`; and
@@ -710,12 +711,11 @@ Treat the broader policies as the target governance contract and the current CLI
 
 The current engine is ready for local, controlled use across one complete governed validation lifecycle: opportunity, evidence, preregistration, approval, activation, execution evidence, measurement, reflection, Major Bet outcome decision, experience preservation, and closure. The most valuable next product increments are:
 
-1. **Web control interface:** expose opportunity status, evidence, experiment review, approval/denial, manual start, and revocation through a clean local UI while preserving the same backend gates.
-2. **Identity and access:** authenticate operators and bind Human Authority actions to verifiable identities before any hosted or multi-user use.
-3. **Learning-lab continuation:** add the dedicated budget, owner, learning metric, monthly review, and expiry record required to continue a `learning_lab` outcome; generic follow-up remains fail-closed.
-4. **Operator experience:** add opportunity listing, non-interactive structured input/output, broader correction workflows, and search on top of the guided `next` command.
-5. **Customer-reality integrations:** import approved evidence without granting retrieved content authority.
-6. **Packaging and release:** publish a versioned distribution with migration and compatibility guarantees.
+1. **Operator experience:** add opportunity listing, non-interactive structured input/output, broader correction workflows, and search on top of the guided `next` command.
+2. **Customer-reality integrations:** import approved evidence without granting retrieved content authority.
+3. **Packaging and release:** publish a versioned distribution with migration and compatibility guarantees.
+4. **Identity and access (deferred):** authenticate operators and bind Human Authority actions to verifiable identities before any hosted or multi-user use.
+5. **Web control interface (paused):** expose the same backend gates through a local UI only when the operator workflow is mature enough to justify it.
 
 The guiding rule is simple: automate only what has been understood manually, and measure success through better external decisions—not more internal artifacts.
 

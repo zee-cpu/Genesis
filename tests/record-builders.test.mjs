@@ -175,6 +175,25 @@ test("builders reject restricted evidence and schema-invalid records", () => {
   );
 });
 
+test("decision builder preserves governed Learning Lab continuation fields", () => {
+  const decision = buildDecisionRecord({
+    ...validDecisionInput,
+    business_id: "bakery-learning-lab-01",
+    continuation_type: "learning_lab",
+    parent_business: "bakery",
+    learning_lab: {
+      budget: { cash_usd: 1, labor_hours: 2 },
+      owner: "research",
+      learning_metric: "validated_failure_causes",
+      monthly_review: "2026-08-18T00:00:00Z",
+      expiry: "2026-10-18T00:00:00Z",
+    },
+  }, clock);
+  assert.equal(decision.continuation_type, "learning_lab");
+  assert.equal(decision.parent_business, "bakery");
+  assert.equal(decision.learning_lab.owner, "research");
+});
+
 test("builders can validate against an injected registry", () => {
   let evidenceCalls = 0;
   let recordCalls = 0;

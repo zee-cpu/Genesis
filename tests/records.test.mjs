@@ -251,6 +251,25 @@ test("decision record carries the target customer", async () => {
   assert.equal(compileSchema("decision_record")(decision), false);
 });
 
+test("learning-lab decisions require their complete governance envelope", () => {
+  const decision = loadTemplate("decision_record");
+  decision.continuation_type = "learning_lab";
+  const validateMissing = compileSchema("decision_record");
+  assert.equal(validateMissing(decision), false);
+  assert.equal(validateMissing.errors.some((error) => error.params?.missingProperty === "learning_lab"), true);
+
+  decision.parent_business = "failed-parent";
+  decision.learning_lab = {
+    budget: { cash_usd: 1, labor_hours: 2 },
+    owner: "research",
+    learning_metric: "validated_failure_causes",
+    monthly_review: "2026-08-18T00:00:00Z",
+    expiry: "2026-10-18T00:00:00Z",
+  };
+  const validateComplete = compileSchema("decision_record");
+  assert.equal(validateComplete(decision), true, JSON.stringify(validateComplete.errors));
+});
+
 test("Major Bet decisions require reviews, recommendation, and approval", () => {
   const decision = loadTemplate("decision_record");
   decision.decision_class = "major_bet";

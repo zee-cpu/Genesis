@@ -11,6 +11,7 @@ const HELP = [
   "Usage:",
   "  genesis start-business",
   "  genesis start-follow-up <business-id>",
+  "  genesis start-learning-lab <business-id>",
   "  genesis add-evidence <business-id>",
   "  genesis status <business-id>",
   "  genesis next <business-id>",
@@ -177,6 +178,32 @@ async function gatherFollowUpInput(prompter, guidance) {
     decision: await askRequired(prompter, "Decision this follow-up should support: "),
     owner: await askRequired(prompter, `Owner [${defaults.owner}]: `, defaults.owner),
     review_date: await askRequired(prompter, `Review date [${defaults.review_date}]: `, defaults.review_date),
+  };
+}
+
+async function gatherLearningLabInput(prompter, guidance) {
+  const base = await gatherFollowUpInput(prompter, guidance);
+  const defaults = guidance.defaults ?? {};
+  const owner = base.owner;
+  const learningMetric = base.metric;
+  return {
+    ...base,
+    owner,
+    metric: learningMetric,
+    learning_lab: {
+      budget: {
+        cash_usd: await askGuidedNumber(prompter, "Learning Lab cash budget (USD) [0]: ", { fallback: 0 }),
+        labor_hours: await askGuidedNumber(prompter, "Learning Lab labor budget (hours) [1]: ", { fallback: 1 }),
+      },
+      owner,
+      learning_metric: learningMetric,
+      monthly_review: await askRequired(
+        prompter,
+        `Monthly review timestamp [${defaults.monthly_review}]: `,
+        defaults.monthly_review,
+      ),
+      expiry: await askRequired(prompter, `Learning Lab expiry [${defaults.expiry}]: `, defaults.expiry),
+    },
   };
 }
 
@@ -509,6 +536,21 @@ export async function runCli(argv, dependencies = {}) {
       return 0;
     }
 
+    if (command === "start-learning-lab") {
+      if (!businessId) {
+        usage(output);
+        return 2;
+      }
+      const guidance = await service.next(businessId);
+      writeLine(output, renderNextGuidance(guidance));
+      const result = await service.startLearningLab(
+        businessId,
+        await gatherLearningLabInput(prompter, guidance),
+      );
+      writeMutationResult(result, output, errorOutput);
+      return 0;
+    }
+
     if (command === "add-evidence") {
       if (!businessId) {
         usage(output);
@@ -638,6 +680,15 @@ export async function runCli(argv, dependencies = {}) {
         const result = await service.startFollowUp(
           businessId,
           await gatherFollowUpInput(prompter, guidance),
+        );
+        writeMutationResult(result, output, errorOutput);
+        return 0;
+      }
+
+      if (guidance.action === "start_learning_lab") {
+        const result = await service.startLearningLab(
+          businessId,
+          await gatherLearningLabInput(prompter, guidance),
         );
         writeMutationResult(result, output, errorOutput);
         return 0;

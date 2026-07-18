@@ -24,7 +24,29 @@
     "constitution_review": { "$ref": "#/$defs/nonempty" },
     "evidence_review": { "$ref": "#/$defs/nonempty" },
     "ceo_recommendation": { "$ref": "#/$defs/nonempty" },
-    "approval_references": { "$ref": "#/$defs/nonemptyRecordRefs" }
+    "approval_references": { "$ref": "#/$defs/nonemptyRecordRefs" },
+    "continuation_type": { "const": "learning_lab" },
+    "parent_business": { "$ref": "#/$defs/id" },
+    "learning_lab": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["budget", "owner", "learning_metric", "monthly_review", "expiry"],
+      "properties": {
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["cash_usd", "labor_hours"],
+          "properties": {
+            "cash_usd": { "type": "number", "minimum": 0 },
+            "labor_hours": { "type": "number", "minimum": 0 }
+          }
+        },
+        "owner": { "$ref": "#/$defs/nonempty" },
+        "learning_metric": { "$ref": "#/$defs/nonempty" },
+        "monthly_review": { "$ref": "#/$defs/dateTime" },
+        "expiry": { "$ref": "#/$defs/dateTime" }
+      }
+    }
   },
   "allOf": [
     {
@@ -38,6 +60,13 @@
           "ceo_recommendation": true,
           "approval_references": true
         }
+      }
+    },
+    {
+      "if": { "properties": { "continuation_type": { "const": "learning_lab" } }, "required": ["continuation_type"] },
+      "then": {
+        "required": ["parent_business", "learning_lab"],
+        "properties": { "parent_business": true, "learning_lab": true }
       }
     }
   ],

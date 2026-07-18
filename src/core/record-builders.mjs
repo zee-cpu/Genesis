@@ -141,6 +141,9 @@ export function buildDecisionRecord(input, clock, options = {}) {
     review_date: input.review_date,
     actual_outcome: null,
     confidence_update: null,
+    ...(input.continuation_type ? { continuation_type: input.continuation_type } : {}),
+    ...(input.parent_business ? { parent_business: input.parent_business } : {}),
+    ...(input.learning_lab ? { learning_lab: input.learning_lab } : {}),
   };
 
   return activeRegistry.validateRecord("decision_record", decision);

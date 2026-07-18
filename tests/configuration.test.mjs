@@ -189,6 +189,7 @@ test("README documents the offline CLI, files, recovery, and limits", async () =
   for (const command of [
     "genesis start-business",
     "genesis start-follow-up <business-id>",
+    "genesis start-learning-lab <business-id>",
     "genesis add-evidence <business-id>",
     "genesis status <business-id>",
     "genesis next <business-id>",

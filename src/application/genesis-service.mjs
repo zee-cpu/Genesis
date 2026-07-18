@@ -434,6 +434,40 @@ function guidedNextStep({ projectRoot, businessId, clock }) {
         },
       };
     }
+    if (experiment?.decision_outcome === "learning_lab") {
+      if (experiment.validation_outcome !== "failed") {
+        return {
+          ...base,
+          action: "no_transition",
+          message: "The experiment is closed, but Learning Lab reserve cannot be used because the reviewed initiative did not fail.",
+          blocker: {
+            code: "LEARNING_LAB_FAILED_INITIATIVE_REQUIRED",
+            path: "/validation_outcome",
+            correction: "Preserve the closed result; Learning Lab reserve is only available to real failed initiatives.",
+            escalation: "ceo",
+          },
+        };
+      }
+      return {
+        ...base,
+        action: "start_learning_lab",
+        message: "The failed initiative is classified for a bounded Learning Lab. Define its separate budget, owner, metric, review, and expiry before any new experiment is planned.",
+        defaults: {
+          business_id: `${normalized}-learning-lab-01`,
+          target_customer: decision?.target_customer,
+          confidence: experience?.confidence,
+          source_reference: `experience://${experience?.id}`,
+          summary: experience?.reusable_lesson,
+          provenance: `Genesis reviewed failed initiative ${experience?.id}`,
+          privacy_classification: experience?.privacy_classification,
+          counterevidence: experience?.contradicting_evidence ?? [],
+          owner: experiment?.owner,
+          review_date: new Date(Date.parse(now) + (14 * 86_400_000)).toISOString(),
+          monthly_review: new Date(Date.parse(now) + (30 * 86_400_000)).toISOString(),
+          expiry: new Date(Date.parse(now) + (90 * 86_400_000)).toISOString(),
+        },
+      };
+    }
     const correction = experiment?.decision_outcome === "learning_lab"
       ? "A learning lab needs separate budget, learning metric, monthly review, and expiry governance."
       : "This terminal outcome does not create follow-up authority.";
@@ -524,6 +558,9 @@ function startBusinessProposal(input, clock, registry) {
     decision: input.decision,
     review_date: input.review_date,
     privacy_classification: input.privacy_classification,
+    continuation_type: input.continuation_type,
+    parent_business: input.parent_business,
+    learning_lab: input.learning_lab,
   }, clock, { registry });
 
   return {
@@ -600,6 +637,112 @@ function startFollowUpProposal(projectRoot, parentBusinessId, input, clock, regi
     command: "start-follow-up",
     parent_business_id: parentId,
     parent_outcome: outcome,
+  };
+}
+
+function startLearningLabProposal(projectRoot, parentBusinessId, input, clock, registry) {
+  const parentId = normalizeBusinessId(parentBusinessId);
+  const childId = normalizeBusinessId(input.business_id);
+  if (parentId === childId) {
+    throw new GenesisError("LEARNING_LAB_ID_REUSED", "A learning lab requires a new business ID", {
+      path: "/business_id",
+      correction: "Choose a new ID so the closed initiative remains immutable",
+      escalation: "research",
+    });
+  }
+
+  const parent = businessEntries(projectRoot, parentId);
+  ensureBusinessExists(parent.decisionEntries, parentId);
+  ensureExperimentExists(parent.experimentEntries);
+  const parentExperiment = latestExperimentEntry(parent.entries);
+  const parentExperience = latestExperienceEntry(parent.entries);
+  const parentDecision = latestDecisionEntry(parent.entries);
+  if (
+    parentExperiment.record.status !== "closed"
+    || parentExperience?.record.status !== "closed"
+    || parentDecision.record.status !== "closed"
+  ) {
+    throw new GenesisError("LEARNING_LAB_PARENT_NOT_CLOSED", "Learning Lab work requires a fully closed parent workflow", {
+      path: "/parent_business/state",
+      correction: "Complete governed closure before allocating Learning Lab reserve",
+      escalation: "ceo",
+    });
+  }
+  if (parentExperiment.record.decision_outcome !== "learning_lab") {
+    throw new GenesisError("LEARNING_LAB_OUTCOME_REQUIRED", "The parent outcome does not authorize Learning Lab classification", {
+      path: "/decision_outcome",
+      correction: "Use the continuation route matching the immutable parent outcome",
+      escalation: "analyst",
+    });
+  }
+  if (parentExperiment.record.validation_outcome !== "failed") {
+    throw new GenesisError("LEARNING_LAB_FAILED_INITIATIVE_REQUIRED", "Learning Lab reserve requires a real failed initiative", {
+      path: "/validation_outcome",
+      correction: "Do not allocate Learning Lab reserve unless the reviewed parent validation outcome is failed",
+      escalation: "ceo",
+    });
+  }
+  if (businessEntries(projectRoot, childId).decisionEntries.length > 0) {
+    throw new GenesisError("BUSINESS_ALREADY_EXISTS", "Learning Lab opportunity already exists", {
+      path: "/business_id",
+      correction: "Choose a new Learning Lab business ID",
+      escalation: "research",
+    });
+  }
+
+  const budget = input.learning_lab?.budget;
+  const monthlyReview = Date.parse(input.learning_lab?.monthly_review);
+  const expiry = Date.parse(input.learning_lab?.expiry);
+  const now = clock().getTime();
+  if (
+    !Number.isFinite(budget?.cash_usd)
+    || budget.cash_usd < 0
+    || !Number.isFinite(budget?.labor_hours)
+    || budget.labor_hours < 0
+  ) {
+    throw new GenesisError("LEARNING_LAB_BUDGET_INVALID", "Learning Lab budget must contain finite non-negative limits", {
+      path: "/learning_lab/budget",
+      correction: "Provide explicit non-negative cash_usd and labor_hours limits",
+      escalation: "ceo",
+    });
+  }
+  if (!input.learning_lab?.owner || !input.learning_lab?.learning_metric) {
+    throw new GenesisError("LEARNING_LAB_GOVERNANCE_INCOMPLETE", "Learning Lab owner and metric are required", {
+      path: "/learning_lab",
+      correction: "Provide a named owner and one explicit learning metric",
+      escalation: "ceo",
+    });
+  }
+  if (!Number.isFinite(monthlyReview) || !Number.isFinite(expiry) || monthlyReview <= now || monthlyReview >= expiry) {
+    throw new GenesisError("LEARNING_LAB_TIME_INVALID", "Learning Lab review and expiry timestamps are invalid", {
+      path: "/learning_lab/monthly_review",
+      correction: "Set a future monthly review before a later expiry",
+      escalation: "ceo",
+    });
+  }
+
+  const proposal = startBusinessProposal({
+    ...input,
+    business_id: childId,
+    owner: input.learning_lab.owner,
+    metric: input.learning_lab.learning_metric,
+    evidence_references: unique([
+      input.source_reference,
+      `experience://${parentExperience.record.id}`,
+    ]),
+    related_records: unique([
+      parentDecision.record.id,
+      parentExperiment.record.id,
+      parentExperience.record.id,
+    ]),
+    continuation_type: "learning_lab",
+    parent_business: parentId,
+  }, clock, registry);
+  return {
+    ...proposal,
+    command: "start-learning-lab",
+    parent_business_id: parentId,
+    parent_outcome: "learning_lab",
   };
 }
 
@@ -702,6 +845,48 @@ function planExperimentProposal(projectRoot, businessId, input, clock, registry)
       correction: blocker?.correction ?? "Complete the Discover gate before planning an experiment",
       escalation: blocker?.escalation ?? "builder",
     });
+  }
+
+  const learningLab = latestDecision.record.learning_lab;
+  if (latestDecision.record.continuation_type === "learning_lab") {
+    if (input.owner !== learningLab.owner) {
+      throw new GenesisError("LEARNING_LAB_OWNER_MISMATCH", "Experiment owner does not match Learning Lab governance", {
+        path: "/owner",
+        correction: `Use the governed Learning Lab owner ${learningLab.owner}`,
+        escalation: "ceo",
+      });
+    }
+    if (input.metric?.formula !== learningLab.learning_metric) {
+      throw new GenesisError("LEARNING_LAB_METRIC_MISMATCH", "Experiment metric does not match the governed learning metric", {
+        path: "/metric/formula",
+        correction: `Use the governed learning metric: ${learningLab.learning_metric}`,
+        escalation: "analyst",
+      });
+    }
+    if (
+      input.limits?.cash_usd > learningLab.budget.cash_usd
+      || input.limits?.labor_hours > learningLab.budget.labor_hours
+    ) {
+      throw new GenesisError("LEARNING_LAB_BUDGET_EXCEEDED", "Experiment limits exceed the Learning Lab budget", {
+        path: "/limits",
+        correction: "Reduce cash and labor limits to the governed Learning Lab budget",
+        escalation: "ceo",
+      });
+    }
+    const decisionTime = Date.parse(input.decision_date);
+    const plannedEnd = decisionTime + ((input.limits?.duration_days ?? 0) * 86_400_000);
+    const learningLabExpiry = Date.parse(learningLab.expiry);
+    if (
+      !Number.isFinite(decisionTime)
+      || clock().getTime() >= learningLabExpiry
+      || plannedEnd > learningLabExpiry
+    ) {
+      throw new GenesisError("LEARNING_LAB_EXPIRY_EXCEEDED", "Experiment duration extends beyond Learning Lab expiry", {
+        path: "/limits/duration_days",
+        correction: "Shorten the plan so it ends on or before the governed expiry",
+        escalation: "ceo",
+      });
+    }
   }
 
   const supportingEvidence = evidenceEntries.filter(({ record }) => record.stance === "support");
@@ -1560,6 +1745,13 @@ export function createGenesisService({
       return runWithProposal(
         () => startFollowUpProposal(projectRoot, parentBusinessId, input, clock, activeRegistry),
         "start-follow-up",
+      );
+    },
+
+    async startLearningLab(parentBusinessId, input) {
+      return runWithProposal(
+        () => startLearningLabProposal(projectRoot, parentBusinessId, input, clock, activeRegistry),
+        "start-learning-lab",
       );
     },
 

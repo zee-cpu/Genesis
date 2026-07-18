@@ -154,6 +154,28 @@ function followUpInput(overrides = {}) {
   };
 }
 
+function learningLabInput(overrides = {}) {
+  return {
+    ...followUpInput({
+      business_id: "bakery-learning-lab-01",
+      problem: "The failed validation needs bounded investigation before another market test",
+      hypothesis: "A small learning exercise can identify why the validation failed",
+      summary: "The reviewed validation failed and produced a bounded reusable lesson",
+      expected_outcome: "The lab identifies one testable cause of failure",
+      metric: "validated_failure_causes",
+      decision: "decide_whether_a_new_validation_is_warranted",
+    }),
+    learning_lab: {
+      budget: { cash_usd: 1, labor_hours: 2 },
+      owner: "research",
+      learning_metric: "validated_failure_causes",
+      monthly_review: "2026-08-16T12:00:00Z",
+      expiry: "2026-10-15T12:00:00Z",
+    },
+    ...overrides,
+  };
+}
+
 function createService(projectRoot, confirm = async () => true) {
   return createGenesisService({
     projectRoot,
@@ -336,6 +358,109 @@ await runSection("guidedNextUsesProjectionAndLifecycleState", async () => {
       () => service.next("bakery"),
       (error) => error.code === "PROJECTION_STALE" && error.path === "/projection",
     );
+  } finally {
+    cleanupProjectRoot(projectRoot);
+  }
+});
+
+await runSection("failedInitiativeCreatesGovernedLearningLab", async () => {
+  const projectRoot = makeProjectRoot();
+  try {
+    const service = createService(projectRoot);
+    await service.startBusiness(startBusinessInput());
+    await service.planExperiment("bakery", experimentInput());
+    await service.approveExperiment("bakery", approvalInput());
+    await service.startExperiment("bakery", { actor: "research" });
+    await service.recordExecution("bakery", {
+      actor: "research",
+      execution_log: ["Completed the bounded validation"],
+      deviations: [],
+      completion_reason: "completed",
+      started_at: "2026-07-17T12:00:00Z",
+      completed_at: "2026-07-17T12:00:00Z",
+      actual_cost: { cash_usd: 0, labor_hours: 1 },
+      data_classes: ["internal"],
+      risk_level: "low",
+    });
+    await service.recordMeasurement("bakery", {
+      reviewer: "analyst",
+      actual_result: "The minimum meaningful effect was not reached",
+      comparison: "Observed performance remained at the baseline",
+      measurement_evidence: ["observed_session_log"],
+      data_quality: { assessment: "adequate", limitations: [] },
+    });
+    await service.recordReflection("bakery", reflectionInput({
+      validation_outcome: "failed",
+      reflection: "The preregistered validation failed despite adequate evidence.",
+      reusable_lesson: "Investigate the failure cause within a bounded Learning Lab.",
+      confidence_update: 0.35,
+    }));
+    await service.decideExperiment("bakery", outcomeDecisionInput({
+      outcome: "learning_lab",
+      rationale: "The failed initiative warrants a separately governed bounded learning exercise.",
+      ceo_recommendation: "Allocate a small Learning Lab reserve without carrying execution authority forward.",
+    }));
+    await service.closeExperiment("bakery", { actor: "analyst" });
+
+    const guidance = await service.next("bakery");
+    assert.equal(guidance.action, "start_learning_lab");
+    assert.equal(guidance.defaults.business_id, "bakery-learning-lab-01");
+
+    const created = await service.startLearningLab("bakery", learningLabInput());
+    assert.equal(created.state, "discover");
+    assert.equal(created.business_id, "bakery-learning-lab-01");
+    const childStatus = await service.status("bakery-learning-lab-01");
+    assert.equal(childStatus.approval_versions, 0);
+    assert.equal(childStatus.experiment_versions, 0);
+    const childDecisionDescriptor = listRecords(projectRoot).find((item) => (
+      item.kind === "decision" && item.id === "bakery-learning-lab-01-decision"
+    ));
+    const childDecision = readRecord(childDecisionDescriptor.absolutePath);
+    assert.equal(childDecision.continuation_type, "learning_lab");
+    assert.equal(childDecision.parent_business, "bakery");
+    assert.deepEqual(childDecision.learning_lab.budget, { cash_usd: 1, labor_hours: 2 });
+
+    const compliantPlan = experimentInput({
+      owner: "research",
+      metric: {
+        ...experimentInput().metric,
+        formula: "validated_failure_causes",
+      },
+      limits: {
+        ...experimentInput().limits,
+        cash_usd: 1,
+        labor_hours: 2,
+      },
+    });
+    await assert.rejects(
+      () => service.planExperiment("bakery-learning-lab-01", { ...compliantPlan, owner: "builder" }),
+      (error) => error.code === "LEARNING_LAB_OWNER_MISMATCH",
+    );
+    await assert.rejects(
+      () => service.planExperiment("bakery-learning-lab-01", {
+        ...compliantPlan,
+        metric: { ...compliantPlan.metric, formula: "another_metric" },
+      }),
+      (error) => error.code === "LEARNING_LAB_METRIC_MISMATCH",
+    );
+    await assert.rejects(
+      () => service.planExperiment("bakery-learning-lab-01", {
+        ...compliantPlan,
+        limits: { ...compliantPlan.limits, labor_hours: 3 },
+      }),
+      (error) => error.code === "LEARNING_LAB_BUDGET_EXCEEDED",
+    );
+    await assert.rejects(
+      () => service.planExperiment("bakery-learning-lab-01", {
+        ...compliantPlan,
+        limits: { ...compliantPlan.limits, duration_days: 100 },
+      }),
+      (error) => error.code === "LEARNING_LAB_EXPIRY_EXCEEDED",
+    );
+    const planned = await service.planExperiment("bakery-learning-lab-01", compliantPlan);
+    assert.equal(planned.state, "approval_pending");
+    assert.equal(planned.record.limits.cash_usd, 1);
+    assert.equal(planned.record.metric.formula, "validated_failure_causes");
   } finally {
     cleanupProjectRoot(projectRoot);
   }
