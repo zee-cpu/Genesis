@@ -367,6 +367,24 @@ This validates every canonical YAML record and replaces the SQLite projection wi
 
 ## Command reference
 
+Read-only operator commands support machine-readable output:
+
+```bash
+genesis list --json
+genesis status bakery --json
+genesis next bakery --json
+genesis review-experiment bakery --json
+```
+
+Mutation commands can read their proposal fields from a JSON object while preserving the normal preview and final confirmation:
+
+```bash
+genesis start-business --input business-proposal.json
+genesis plan-experiment bakery --input experiment-proposal.json
+```
+
+`--input <file.json>` removes repetitive field prompts; it does not grant approval, suppress validation, or bypass `[y/N]` confirmation.
+
 | Command | Purpose | Writes records? | Expected end state |
 |---|---|---:|---|
 | `genesis start-business` | Create an opportunity, its first decision, and initial evidence | Yes, after confirmation | `discover` |
@@ -691,7 +709,7 @@ Genesis 2.0 is a practical foundation and a working discovery CLI, but it is not
 
 Current technical boundaries include:
 
-- guided and direct interactive prompts only; no flags, input file, JSON output, or non-interactive mode;
+- structured input is JSON-file based and still requires interactive confirmation; there is no unattended approval mode;
 - one local operator and one process per workspace operation;
 - no supported command to edit a mistaken record or create a superseding correction;
 - terminal-driven review only; no web approval inbox, authentication, signatures, or cryptographic identity proof;
@@ -711,7 +729,7 @@ Treat the broader policies as the target governance contract and the current CLI
 
 The current engine is ready for local, controlled use across one complete governed validation lifecycle: opportunity, evidence, preregistration, approval, activation, execution evidence, measurement, reflection, Major Bet outcome decision, experience preservation, and closure. The most valuable next product increments are:
 
-1. **Operator experience:** add opportunity listing, non-interactive structured input/output, broader correction workflows, and search on top of the guided `next` command.
+1. **Operator experience:** add broader correction workflows and search on top of the guided `list` and `next` commands.
 2. **Customer-reality integrations:** import approved evidence without granting retrieved content authority.
 3. **Packaging and release:** publish a versioned distribution with migration and compatibility guarantees.
 4. **Identity and access (deferred):** authenticate operators and bind Human Authority actions to verifiable identities before any hosted or multi-user use.

@@ -209,6 +209,8 @@ test("README documents the offline CLI, files, recovery, and limits", async () =
   ]) {
     assert.match(readme, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+  assert.match(readme, /--json/);
+  assert.match(readme, /--input <file\.json>/);
 
   assert.match(readme, /\.genesis\//);
   assert.match(readme, /approval_pending/);

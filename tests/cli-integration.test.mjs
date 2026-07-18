@@ -237,6 +237,63 @@ test("CLI runs start-business, add-evidence, status, plan-experiment, and rebuil
   }
 });
 
+test("CLI accepts JSON proposal input and emits clean JSON read output", { concurrency: false }, async () => {
+  const projectRoot = makeProjectRoot();
+  const proposalPath = path.join(projectRoot, "business-proposal.json");
+  fs.writeFileSync(proposalPath, JSON.stringify({
+    business_id: "structured-bakery",
+    owner: "research",
+    target_customer: "Independent bakery owners",
+    problem: "Weekly reconciliation takes too long",
+    hypothesis: "A clearer view reduces reconciliation time",
+    confidence: 0.55,
+    source_reference: "interview://structured-owner-1",
+    summary: "The owner reports two hours of weekly reconciliation",
+    stance: "support",
+    provenance: "Operator-entered interview note",
+    privacy_classification: "internal",
+    counterevidence: ["The owner may prefer the existing spreadsheet"],
+    alternatives: ["keep_manual_process"],
+    expected_outcome: "Reconciliation takes less than one hour",
+    metric: "weekly_reconciliation_minutes",
+    decision: "run_bounded_validation",
+    review_date: "2026-07-24T12:00:00Z"
+  }));
+  const mutationOutput = createBuffer();
+  const mutationPrompter = createScriptedPrompter(["y"], mutationOutput);
+
+  try {
+    const startExit = await runCli(["start-business", "--input", proposalPath], {
+      projectRoot,
+      repoRoot: ROOT,
+      clock: CLOCK,
+      prompter: mutationPrompter,
+      output: mutationOutput,
+      errorOutput: mutationOutput,
+    });
+    assert.equal(startExit, 0);
+    assert.equal(mutationOutput.toString().includes("Offline suggestion — not evidence:"), false);
+    assert.equal(mutationOutput.toString().includes("Save this immutable record? [y/N]"), true);
+
+    const jsonOutput = createBuffer();
+    const listExit = await runCli(["list", "--json"], {
+      projectRoot,
+      repoRoot: ROOT,
+      clock: CLOCK,
+      prompter: createScriptedPrompter([], jsonOutput),
+      output: jsonOutput,
+      errorOutput: jsonOutput,
+    });
+    assert.equal(listExit, 0);
+    const parsed = JSON.parse(jsonOutput.toString());
+    assert.equal(parsed.count, 1);
+    assert.equal(parsed.opportunities[0].business_id, "structured-bakery");
+    assert.equal(parsed.opportunities[0].next_command, "plan-experiment");
+  } finally {
+    cleanupProjectRoot(projectRoot);
+  }
+});
+
 test("CLI returns 2 for unknown commands and 1 for validation errors", { concurrency: false }, async () => {
   const projectRoot = makeProjectRoot();
   const output = createBuffer();

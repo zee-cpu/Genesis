@@ -69,6 +69,8 @@ genesis next <business-id>
 
 `genesis list` provides a read-only operator inbox with projected state, next action, nearest review timing, and the first actionable blocker. `genesis next` reads the selected lifecycle state from SQLite, verifies that the projection matches canonical YAML, and explains the next supported action. It pulls reusable values from existing records, calculates system timestamps through the configured clock, validates typed input while prompting, and delegates every mutation to the existing service methods. During experiment approval it renders one consolidated authority envelope immediately before the final confirmation. The guided layer does not weaken schemas, approval validity, append-only storage, or rebuild behavior.
 
+Use `--json` with `list`, `status`, `next`, `review-experiment`, or `rebuild-index` for machine-readable output. Use `--input <file.json>` with a mutation command to load proposal fields without answering each prompt. Structured input still passes through the same proposal preview, schema and policy checks, immutable storage path, and final confirmation; it never supplies authority by itself.
+
 ## Change workflow
 
 1. Identify the external decision and affected normative files.

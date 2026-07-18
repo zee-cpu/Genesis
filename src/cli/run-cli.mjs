@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -28,10 +29,69 @@ const HELP = [
   "  genesis close-experiment <business-id>",
   "  genesis revoke-approval <business-id>",
   "  genesis rebuild-index",
+  "",
+  "Options:",
+  "  --json              Machine-readable output for list, status, next, review-experiment, or rebuild-index",
+  "  --input <file.json> Read proposal fields from JSON; final confirmation is still required",
 ].join("\n");
 
 function writeLine(stream, text = "") {
   stream.write(`${text}\n`);
+}
+
+function parseCliOptions(values) {
+  const positional = [];
+  let json = false;
+  let inputPath = null;
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (value === "--json") {
+      json = true;
+    } else if (value === "--help") {
+      positional.push(value);
+    } else if (value === "--input") {
+      inputPath = values[index + 1];
+      index += 1;
+      if (!inputPath) {
+        throw new GenesisError("INPUT_FILE_REQUIRED", "--input requires a JSON file path", {
+          path: "/input",
+          correction: "Use --input path/to/proposal.json",
+          escalation: "operator",
+        });
+      }
+    } else if (value.startsWith("--")) {
+      throw new GenesisError("OPTION_UNKNOWN", `Unknown CLI option: ${value}`, {
+        path: "/options",
+        correction: "Run genesis --help to see supported options",
+        escalation: "operator",
+      });
+    } else {
+      positional.push(value);
+    }
+  }
+  return { positional, json, inputPath };
+}
+
+function readStructuredInput(projectRoot, inputPath) {
+  const absolutePath = path.resolve(projectRoot, inputPath);
+  try {
+    const value = JSON.parse(fs.readFileSync(absolutePath, "utf8"));
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new TypeError("root must be an object");
+    }
+    return value;
+  } catch (cause) {
+    throw new GenesisError("INPUT_FILE_INVALID", "Structured input is not a valid JSON object", {
+      path: absolutePath,
+      correction: "Provide a readable UTF-8 JSON file containing one object",
+      escalation: "operator",
+      cause,
+    });
+  }
+}
+
+function writeJson(stream, value) {
+  writeLine(stream, JSON.stringify(value, null, 2));
 }
 
 function showSuggestions(output) {
@@ -469,9 +529,9 @@ function isGenesisError(error) {
 }
 
 export async function runCli(argv, dependencies = {}) {
-  const args = [...argv];
-  if (args[0] === "genesis") {
-    args.shift();
+  const rawArgs = [...argv];
+  if (rawArgs[0] === "genesis") {
+    rawArgs.shift();
   }
 
   const output = dependencies.output ?? process.stdout;
@@ -502,14 +562,35 @@ export async function runCli(argv, dependencies = {}) {
   });
 
   try {
+    const options = parseCliOptions(rawArgs);
+    const args = options.positional;
     const [command, businessId] = args;
     if (!command || command === "--help" || command === "-h" || command === "help") {
       usage(output);
       return 0;
     }
+    const jsonCommands = new Set(["list", "status", "next", "review-experiment", "rebuild-index"]);
+    if (options.json && !jsonCommands.has(command)) {
+      throw new GenesisError("JSON_OUTPUT_UNSUPPORTED", "JSON output is limited to read-only and rebuild commands", {
+        path: "/options/json",
+        correction: "Use --json with list, status, next, review-experiment, or rebuild-index",
+        escalation: "operator",
+      });
+    }
+    const structuredInput = options.inputPath
+      ? readStructuredInput(projectRoot, options.inputPath)
+      : null;
+    const inputUnsupportedCommands = new Set(["list", "status", "review-experiment", "rebuild-index"]);
+    if (structuredInput && inputUnsupportedCommands.has(command)) {
+      throw new GenesisError("INPUT_FILE_UNSUPPORTED", "This command does not accept proposal input", {
+        path: "/options/input",
+        correction: "Remove --input from read-only and rebuild commands",
+        escalation: "operator",
+      });
+    }
 
     if (command === "start-business") {
-      const inputData = await gatherStartBusinessInput(prompter, output);
+      const inputData = structuredInput ?? await gatherStartBusinessInput(prompter, output);
       const result = await service.startBusiness(inputData);
       if (!result.changed) {
         writeLine(output, "Cancelled.");
@@ -531,7 +612,7 @@ export async function runCli(argv, dependencies = {}) {
       writeLine(output, renderNextGuidance(guidance));
       const result = await service.startFollowUp(
         businessId,
-        await gatherFollowUpInput(prompter, guidance),
+        structuredInput ?? await gatherFollowUpInput(prompter, guidance),
       );
       writeMutationResult(result, output, errorOutput);
       return 0;
@@ -546,7 +627,7 @@ export async function runCli(argv, dependencies = {}) {
       writeLine(output, renderNextGuidance(guidance));
       const result = await service.startLearningLab(
         businessId,
-        await gatherLearningLabInput(prompter, guidance),
+        structuredInput ?? await gatherLearningLabInput(prompter, guidance),
       );
       writeMutationResult(result, output, errorOutput);
       return 0;
@@ -557,7 +638,7 @@ export async function runCli(argv, dependencies = {}) {
         usage(output);
         return 2;
       }
-      const inputData = await gatherAddEvidenceInput(prompter, output);
+      const inputData = structuredInput ?? await gatherAddEvidenceInput(prompter, output);
       const result = await service.addEvidence(businessId, inputData);
       if (!result.changed) {
         writeLine(output, "Cancelled.");
@@ -576,13 +657,15 @@ export async function runCli(argv, dependencies = {}) {
         return 2;
       }
       const status = await service.status(businessId);
-      writeLine(output, renderStatus(status));
+      if (options.json) writeJson(output, status);
+      else writeLine(output, renderStatus(status));
       return 0;
     }
 
     if (command === "list") {
       const result = await service.list();
-      writeLine(output, renderOpportunityList(result));
+      if (options.json) writeJson(output, result);
+      else writeLine(output, renderOpportunityList(result));
       return 0;
     }
 
@@ -592,12 +675,16 @@ export async function runCli(argv, dependencies = {}) {
         return 2;
       }
       const guidance = await service.next(businessId);
+      if (options.json) {
+        writeJson(output, guidance);
+        return 0;
+      }
       writeLine(output, renderNextGuidance(guidance));
 
       if (guidance.action === "plan_experiment") {
         const result = await service.planExperiment(
           businessId,
-          await gatherGuidedExperimentInput(prompter, guidance),
+          structuredInput ?? await gatherGuidedExperimentInput(prompter, guidance),
         );
         writeMutationResult(result, output, errorOutput);
         return 0;
@@ -606,20 +693,22 @@ export async function runCli(argv, dependencies = {}) {
       if (guidance.action === "resolve_discover_blocker") {
         const result = await service.addEvidence(
           businessId,
-          await gatherGuidedDiscoverCorrection(prompter, guidance, output),
+          structuredInput ?? await gatherGuidedDiscoverCorrection(prompter, guidance, output),
         );
         writeMutationResult(result, output, errorOutput);
         return 0;
       }
 
       if (guidance.action === "review_experiment") {
-        const decision = await prompter.choose("Human Authority decision:", [
+        const decision = structuredInput?.decision ?? await prompter.choose("Human Authority decision:", [
           { label: "approve", value: "approved" },
           { label: "deny", value: "denied" },
         ]);
-        const rationale = await askRequired(prompter, `${decision === "approved" ? "Approval" : "Denial"} rationale: `);
+        const rationale = structuredInput?.rationale
+          ?? await askRequired(prompter, `${decision === "approved" ? "Approval" : "Denial"} rationale: `);
         const inputData = {
           ...guidance.defaults,
+          ...(structuredInput ?? {}),
           approver_principal_id: "genesis-owner",
           rationale,
           guided: true,
@@ -633,7 +722,7 @@ export async function runCli(argv, dependencies = {}) {
 
       if (guidance.action === "start_experiment") {
         const result = await service.startExperiment(businessId, {
-          actor: guidance.defaults.actor,
+          actor: structuredInput?.actor ?? guidance.defaults.actor,
         });
         writeMutationResult(result, output, errorOutput);
         return 0;
@@ -642,7 +731,7 @@ export async function runCli(argv, dependencies = {}) {
       if (guidance.action === "record_execution") {
         const result = await service.recordExecution(
           businessId,
-          await gatherExecutionInput(prompter, guidance),
+          structuredInput ?? await gatherExecutionInput(prompter, guidance),
         );
         writeMutationResult(result, output, errorOutput);
         return 0;
@@ -651,7 +740,7 @@ export async function runCli(argv, dependencies = {}) {
       if (guidance.action === "record_measurement") {
         const result = await service.recordMeasurement(
           businessId,
-          await gatherMeasurementInput(prompter, guidance),
+          structuredInput ?? await gatherMeasurementInput(prompter, guidance),
         );
         writeMutationResult(result, output, errorOutput);
         return 0;
@@ -660,7 +749,7 @@ export async function runCli(argv, dependencies = {}) {
       if (guidance.action === "record_reflection") {
         const result = await service.recordReflection(
           businessId,
-          await gatherReflectionInput(prompter, guidance),
+          structuredInput ?? await gatherReflectionInput(prompter, guidance),
         );
         writeMutationResult(result, output, errorOutput);
         return 0;
@@ -669,7 +758,7 @@ export async function runCli(argv, dependencies = {}) {
       if (guidance.action === "decide_experiment") {
         const result = await service.decideExperiment(
           businessId,
-          await gatherOutcomeDecisionInput(prompter, guidance),
+          structuredInput ?? await gatherOutcomeDecisionInput(prompter, guidance),
         );
         writeMutationResult(result, output, errorOutput);
         return 0;
@@ -677,7 +766,7 @@ export async function runCli(argv, dependencies = {}) {
 
       if (guidance.action === "close_experiment") {
         const result = await service.closeExperiment(businessId, {
-          actor: guidance.defaults.actor,
+          actor: structuredInput?.actor ?? guidance.defaults.actor,
         });
         writeMutationResult(result, output, errorOutput);
         return 0;
@@ -686,7 +775,7 @@ export async function runCli(argv, dependencies = {}) {
       if (guidance.action === "start_follow_up") {
         const result = await service.startFollowUp(
           businessId,
-          await gatherFollowUpInput(prompter, guidance),
+          structuredInput ?? await gatherFollowUpInput(prompter, guidance),
         );
         writeMutationResult(result, output, errorOutput);
         return 0;
@@ -695,7 +784,7 @@ export async function runCli(argv, dependencies = {}) {
       if (guidance.action === "start_learning_lab") {
         const result = await service.startLearningLab(
           businessId,
-          await gatherLearningLabInput(prompter, guidance),
+          structuredInput ?? await gatherLearningLabInput(prompter, guidance),
         );
         writeMutationResult(result, output, errorOutput);
         return 0;
@@ -713,7 +802,7 @@ export async function runCli(argv, dependencies = {}) {
       const currentDecisionId = status.latest_decision_path
         ? status.latest_decision_path.split("/").at(-1)?.replace(/\.v\d{4}\.yaml$/, "")
         : `${businessId}-decision`;
-      const inputData = await gatherPlanExperimentInput(prompter, output, currentDecisionId);
+      const inputData = structuredInput ?? await gatherPlanExperimentInput(prompter, output, currentDecisionId);
       const result = await service.planExperiment(businessId, inputData);
       if (!result.changed) {
         writeLine(output, "Cancelled.");
@@ -732,7 +821,8 @@ export async function runCli(argv, dependencies = {}) {
         return 2;
       }
       const review = await service.reviewExperiment(businessId);
-      writeLine(output, renderApprovalReview(review));
+      if (options.json) writeJson(output, review);
+      else writeLine(output, renderApprovalReview(review));
       return 0;
     }
 
@@ -744,7 +834,7 @@ export async function runCli(argv, dependencies = {}) {
       const review = await service.reviewExperiment(businessId);
       writeLine(output, renderApprovalReview(review));
       const decision = command === "approve-experiment" ? "approved" : "denied";
-      const inputData = await gatherApprovalDecisionInput(prompter, review.experiment, decision);
+      const inputData = structuredInput ?? await gatherApprovalDecisionInput(prompter, review.experiment, decision);
       const result = decision === "approved"
         ? await service.approveExperiment(businessId, inputData)
         : await service.denyExperiment(businessId, inputData);
@@ -764,9 +854,11 @@ export async function runCli(argv, dependencies = {}) {
       }
       const review = await service.reviewExperiment(businessId);
       writeLine(output, renderApprovalReview(review));
-      const actor = await prompter.ask(`Experiment actor [${review.approval?.actor ?? review.experiment.owner}]: `)
+      const actor = structuredInput?.actor ?? (
+        await prompter.ask(`Experiment actor [${review.approval?.actor ?? review.experiment.owner}]: `)
         || review.approval?.actor
-        || review.experiment.owner;
+        || review.experiment.owner
+      );
       const result = await service.startExperiment(businessId, { actor });
       if (!result.changed) {
         writeLine(output, "Cancelled.");
@@ -785,8 +877,8 @@ export async function runCli(argv, dependencies = {}) {
       const guidance = await service.next(businessId);
       writeLine(output, renderNextGuidance(guidance));
       const result = command === "record-execution"
-        ? await service.recordExecution(businessId, await gatherExecutionInput(prompter, guidance))
-        : await service.recordMeasurement(businessId, await gatherMeasurementInput(prompter, guidance));
+        ? await service.recordExecution(businessId, structuredInput ?? await gatherExecutionInput(prompter, guidance))
+        : await service.recordMeasurement(businessId, structuredInput ?? await gatherMeasurementInput(prompter, guidance));
       writeMutationResult(result, output, errorOutput);
       return 0;
     }
@@ -800,11 +892,11 @@ export async function runCli(argv, dependencies = {}) {
       writeLine(output, renderNextGuidance(guidance));
       let result;
       if (command === "record-reflection") {
-        result = await service.recordReflection(businessId, await gatherReflectionInput(prompter, guidance));
+        result = await service.recordReflection(businessId, structuredInput ?? await gatherReflectionInput(prompter, guidance));
       } else if (command === "decide-experiment") {
-        result = await service.decideExperiment(businessId, await gatherOutcomeDecisionInput(prompter, guidance));
+        result = await service.decideExperiment(businessId, structuredInput ?? await gatherOutcomeDecisionInput(prompter, guidance));
       } else {
-        result = await service.closeExperiment(businessId, { actor: guidance.defaults.actor });
+        result = await service.closeExperiment(businessId, structuredInput ?? { actor: guidance.defaults.actor });
       }
       writeMutationResult(result, output, errorOutput);
       return 0;
@@ -817,7 +909,7 @@ export async function runCli(argv, dependencies = {}) {
       }
       const review = await service.reviewExperiment(businessId);
       writeLine(output, renderApprovalReview(review));
-      const inputData = await gatherRevocationInput(prompter);
+      const inputData = structuredInput ?? await gatherRevocationInput(prompter);
       const result = await service.revokeApproval(businessId, inputData);
       if (!result.changed) {
         writeLine(output, "Cancelled.");
@@ -830,7 +922,8 @@ export async function runCli(argv, dependencies = {}) {
 
     if (command === "rebuild-index") {
       const result = await service.rebuildIndex();
-      writeLine(output, renderRebuildResult(result));
+      if (options.json) writeJson(output, result);
+      else writeLine(output, renderRebuildResult(result));
       return 0;
     }
 
