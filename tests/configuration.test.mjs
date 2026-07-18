@@ -191,6 +191,11 @@ test("README documents the offline CLI, files, recovery, and limits", async () =
     "genesis add-evidence <business-id>",
     "genesis status <business-id>",
     "genesis plan-experiment <business-id>",
+    "genesis review-experiment <business-id>",
+    "genesis approve-experiment <business-id>",
+    "genesis deny-experiment <business-id>",
+    "genesis start-experiment <business-id>",
+    "genesis revoke-approval <business-id>",
     "genesis rebuild-index",
   ]) {
     assert.match(readme, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
@@ -205,8 +210,9 @@ test("README documents the offline CLI, files, recovery, and limits", async () =
   assert.match(readme, /npm start/);
   assert.match(readme, /node bin\/genesis\.mjs/);
   assert.match(readme, /npm link/);
-  assert.match(readme, /The CLI stops at `approval_pending`/);
-  assert.match(readme, /does not automatically research, contact customers, execute experiments, build products, deploy software, bill customers, or operate a business/i);
+  assert.match(readme, /manually mark an approved experiment `active`/i);
+  assert.match(readme, /does not execute the experiment/i);
+  assert.match(readme, /does not automatically research, contact customers, run experiment steps, build products, deploy software, bill customers, or operate a business/i);
 });
 
 test("package.json exposes a direct start command", async () => {

@@ -284,3 +284,74 @@ test("CLI rejects numeric input with trailing non-numeric characters", { concurr
     cleanupProjectRoot(projectRoot);
   }
 });
+
+test("CLI dispatches Human review, approval, denial, start, and revocation commands", { concurrency: false }, async () => {
+  const projectRoot = makeProjectRoot();
+  const output = createBuffer();
+  const calls = [];
+  const review = {
+    business_id: "bakery",
+    state: "approval_pending",
+    experiment: { id: "bakery-experiment", owner: "research", hypothesis: "Test demand" },
+    approval: null,
+    approval_history: [],
+    approval_validity: { valid: false, blockers: [{ code: "APPROVAL_MISSING", correction: "Record approval" }] },
+  };
+  const status = {
+    business_id: "bakery",
+    state: "approved",
+    next_command: "start-experiment",
+    decision_versions: 1,
+    experiment_versions: 1,
+    approval_versions: 1,
+    evidence_count: 1,
+    discover_gate: { passed: true },
+    experiment_completeness: { missing: [], ratio: 1 },
+    blocked_commands_by_code: {},
+    projection_consistent: true,
+    metrics: {},
+  };
+  const service = {
+    async reviewExperiment(id) { calls.push(["review", id]); return review; },
+    async approveExperiment(id, input) { calls.push(["approve", id, input]); return { changed: true, status }; },
+    async denyExperiment(id, input) { calls.push(["deny", id, input]); return { changed: true, status: { ...status, state: "approval_denied" } }; },
+    async startExperiment(id, input) { calls.push(["start", id, input]); return { changed: true, status: { ...status, state: "active" } }; },
+    async revokeApproval(id, input) { calls.push(["revoke", id, input]); return { changed: true, status: { ...status, state: "approval_revoked" } }; },
+  };
+
+  try {
+    assert.equal(await runCli(["review-experiment", "bakery"], {
+      projectRoot, repoRoot: ROOT, output, errorOutput: output, service,
+      prompter: createScriptedPrompter([], output),
+    }), 0);
+    assert.equal(await runCli(["approve-experiment", "bakery"], {
+      projectRoot, repoRoot: ROOT, output, errorOutput: output, service,
+      prompter: createScriptedPrompter([
+        "genesis-owner", "research", "Approved rationale",
+        "2026-07-17T12:00:00Z", "2026-07-24T12:00:00Z", "2026-07-20T12:00:00Z",
+      ], output),
+    }), 0);
+    assert.equal(await runCli(["deny-experiment", "bakery"], {
+      projectRoot, repoRoot: ROOT, output, errorOutput: output, service,
+      prompter: createScriptedPrompter(["genesis-owner", "research", "Denied rationale"], output),
+    }), 0);
+    assert.equal(await runCli(["start-experiment", "bakery"], {
+      projectRoot, repoRoot: ROOT, output, errorOutput: output, service,
+      prompter: createScriptedPrompter(["research"], output),
+    }), 0);
+    assert.equal(await runCli(["revoke-approval", "bakery"], {
+      projectRoot, repoRoot: ROOT, output, errorOutput: output, service,
+      prompter: createScriptedPrompter(["genesis-owner", "Revoked rationale"], output),
+    }), 0);
+
+    assert.deepEqual(calls.filter(([name]) => name !== "review").map(([name]) => name), [
+      "approve", "deny", "start", "revoke",
+    ]);
+    assert.equal(calls.find(([name]) => name === "approve")[2].approver_principal_id, "genesis-owner");
+    assert.deepEqual(calls.find(([name]) => name === "start")[2], { actor: "research" });
+    assert.match(output.toString(), /Experiment awaiting Human review/);
+    assert.match(output.toString(), /Approval versions: 1/);
+  } finally {
+    cleanupProjectRoot(projectRoot);
+  }
+});

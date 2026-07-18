@@ -84,6 +84,18 @@ function experimentInput(overrides = {}) {
   };
 }
 
+function approvalInput(overrides = {}) {
+  return {
+    approver_principal_id: "genesis-owner",
+    actor: "research",
+    rationale: "The preregistered experiment is bounded and ready for manual execution.",
+    effective_at: "2026-07-17T12:00:00Z",
+    expires_at: "2026-07-24T12:00:00Z",
+    review_at: "2026-07-20T12:00:00Z",
+    ...overrides,
+  };
+}
+
 function createService(projectRoot, confirm = async () => true) {
   return createGenesisService({
     projectRoot,
@@ -185,7 +197,7 @@ await runSection("planExperiment", async () => {
 
     assert.equal(result.changed, true);
     assert.equal(result.state, "approval_pending");
-    assert.equal(result.next_command, "status");
+    assert.equal(result.next_command, "review-experiment");
     assert.equal(result.projection_stale, false);
     assert.equal(result.record.status, "draft");
     assert.equal(result.record.validation_outcome, "pending");
@@ -193,7 +205,7 @@ await runSection("planExperiment", async () => {
 
     const status = await service.status("bakery");
     assert.equal(status.state, "approval_pending");
-    assert.equal(status.next_command, "status");
+    assert.equal(status.next_command, "review-experiment");
     assert.equal(status.experiment_versions, 1);
     assert.equal(status.experiment_completeness.complete, true);
     assert.equal(status.metrics.preregistration_completeness, 1);
@@ -295,6 +307,101 @@ await runSection("pendingUnavailable", async () => {
       () => service.planExperiment("bakery", experimentInput()),
       (error) => error.code === "COMMAND_UNAVAILABLE",
     );
+  } finally {
+    cleanupProjectRoot(projectRoot);
+  }
+});
+
+await runSection("approvalStartAndRevocation", async () => {
+  const projectRoot = makeProjectRoot();
+  try {
+    const service = createService(projectRoot);
+    await service.startBusiness(startBusinessInput());
+    await service.planExperiment("bakery", experimentInput());
+
+    const pendingReview = await service.reviewExperiment("bakery");
+    assert.equal(pendingReview.state, "approval_pending");
+    assert.equal(pendingReview.approval, null);
+    assert.equal(pendingReview.approval_validity.blockers[0].code, "APPROVAL_MISSING");
+
+    await assert.rejects(
+      () => service.approveExperiment("bakery", approvalInput({ approver_principal_id: "agent" })),
+      (error) => error.code === "HUMAN_AUTHORITY_REQUIRED",
+    );
+
+    const approved = await service.approveExperiment("bakery", approvalInput());
+    assert.equal(approved.state, "approved");
+    assert.equal(approved.next_command, "start-experiment");
+    assert.equal(approved.record.record_type, "approval_record");
+    assert.equal(approved.record.decision, "approved");
+    assert.equal(approved.record.scope.wildcard, false);
+    assert.deepEqual(approved.record.scope.actions, ["start_experiment:bakery-experiment"]);
+
+    const approvedStatus = await service.status("bakery");
+    assert.equal(approvedStatus.state, "approved");
+    assert.equal(approvedStatus.approval_versions, 1);
+    assert.equal(approvedStatus.approval_validity.valid, true);
+
+    await assert.rejects(
+      () => service.startExperiment("bakery", { actor: "builder" }),
+      (error) => error.code === "APPROVAL_ACTOR_MISMATCH",
+    );
+
+    const started = await service.startExperiment("bakery", { actor: "research" });
+    assert.equal(started.state, "active");
+    assert.equal(started.record.status, "active");
+    assert.deepEqual(started.record.approval_references, ["bakery-experiment-approval"]);
+
+    const revoked = await service.revokeApproval("bakery", {
+      approver_principal_id: "genesis-owner",
+      rationale: "Human Authority stopped the approved work.",
+    });
+    assert.equal(revoked.state, "approval_revoked");
+    assert.equal(revoked.record.status, "revoked");
+    assert.equal(revoked.records.some((record) => record.status === "superseded"), true);
+
+    const revokedStatus = await service.status("bakery");
+    assert.equal(revokedStatus.state, "approval_revoked");
+    assert.equal(revokedStatus.approval_versions, 2);
+    assert.equal(revokedStatus.experiment_versions, 3);
+    assert.equal(revokedStatus.approval.revoked, true);
+
+    const rebuild = await service.rebuildIndex();
+    assert.deepEqual(rebuild, { recordCount: 7, businessCount: 1, projection_consistent: true });
+    assert.equal((await service.status("bakery")).state, "approval_revoked");
+  } finally {
+    cleanupProjectRoot(projectRoot);
+  }
+});
+
+await runSection("denialCanBeSupersededByExplicitApproval", async () => {
+  const projectRoot = makeProjectRoot();
+  try {
+    const service = createService(projectRoot);
+    await service.startBusiness(startBusinessInput());
+    await service.planExperiment("bakery", experimentInput());
+
+    const denied = await service.denyExperiment("bakery", {
+      approver_principal_id: "genesis-owner",
+      actor: "research",
+      rationale: "The current evidence is not sufficient.",
+    });
+    assert.equal(denied.state, "approval_denied");
+    assert.equal(denied.record.decision, "denied");
+    assert.equal((await service.status("bakery")).state, "approval_denied");
+    await assert.rejects(
+      () => service.startExperiment("bakery", { actor: "research" }),
+      (error) => error.code === "APPROVAL_NOT_ACTIVE",
+    );
+
+    const approved = await service.approveExperiment("bakery", approvalInput({
+      rationale: "New review supports the bounded experiment.",
+    }));
+    assert.equal(approved.state, "approved");
+    assert.equal(approved.status.approval_versions, 2);
+    const review = await service.reviewExperiment("bakery");
+    assert.equal(review.approval_history.length, 2);
+    assert.equal(review.approval.decision, "approved");
   } finally {
     cleanupProjectRoot(projectRoot);
   }

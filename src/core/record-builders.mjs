@@ -13,6 +13,50 @@ function timestamp(clock) {
   return clock().toISOString();
 }
 
+function approvalTimes(input, now) {
+  const issuedAt = input.issued_at ?? now;
+  const effectiveAt = input.effective_at ?? issuedAt;
+  const expiresAt = input.expires_at;
+  const reviewAt = input.review_at ?? issuedAt;
+  const values = [issuedAt, effectiveAt, expiresAt, reviewAt].map((value) => Date.parse(value));
+  if (
+    values.some((value) => !Number.isFinite(value))
+    || values[0] > values[1]
+    || values[1] >= values[2]
+    || values[3] < values[0]
+    || values[3] > values[2]
+  ) {
+    throw new GenesisError("APPROVAL_TIME_INVALID", "Approval timestamps are invalid", {
+      path: "/expires_at",
+      correction: "Use issued <= effective < expiry with review between issue and expiry",
+      escalation: "human_authority",
+    });
+  }
+  return {
+    issued_at: issuedAt,
+    effective_at: effectiveAt,
+    expires_at: expiresAt,
+    review_at: reviewAt,
+  };
+}
+
+function validateApprovalAuthority(input) {
+  if (input.approver_principal_id !== "genesis-owner" || input.approver_role !== "human_authority") {
+    throw new GenesisError("HUMAN_AUTHORITY_REQUIRED", "Approval must be issued by Genesis Human Authority", {
+      path: "/approver_principal_id",
+      correction: "Use the real Human Authority principal genesis-owner",
+      escalation: "human_authority",
+    });
+  }
+  if (input.requester === input.approver_principal_id) {
+    throw new GenesisError("SEPARATION_OF_DUTIES_REQUIRED", "Protected-action requester and approver must differ", {
+      path: "/requester",
+      correction: "Preserve a requester distinct from genesis-owner",
+      escalation: "human_authority",
+    });
+  }
+}
+
 function privacy(input) {
   return input.privacy_classification ?? "internal";
 }
@@ -166,4 +210,86 @@ export function buildExperimentRecord(input, clock, options = {}) {
   };
 
   return activeRegistry.validateRecord("experiment_record", experiment);
+}
+
+export function versionExperimentRecord(previous, changes, historyRef, clock, options = {}) {
+  const activeRegistry = resolveRegistry(options);
+  const experiment = {
+    ...previous,
+    ...changes,
+    id: previous.id,
+    record_type: "experiment_record",
+    schema_version: SCHEMA_VERSION,
+    policy_version: POLICY_VERSION,
+    created_at: previous.created_at,
+    updated_at: timestamp(clock),
+    affected_business: previous.affected_business,
+    immutable_history_refs: [...new Set([
+      ...previous.immutable_history_refs,
+      historyRef,
+    ])],
+  };
+  rejectRestrictedExperimentData(experiment.limits);
+  return activeRegistry.validateRecord("experiment_record", experiment);
+}
+
+export function buildApprovalRecord(input, clock, options = {}) {
+  const activeRegistry = resolveRegistry(options);
+  validateApprovalAuthority(input);
+
+  const now = timestamp(clock);
+  const times = approvalTimes(input, now);
+  const approval = {
+    id: input.id,
+    record_type: "approval_record",
+    schema_version: SCHEMA_VERSION,
+    policy_version: POLICY_VERSION,
+    created_at: now,
+    updated_at: now,
+    owner: "human_authority",
+    affected_business: normalizeBusinessId(input.affected_business),
+    status: input.status,
+    evidence_references: input.evidence_references,
+    related_records: input.related_records ?? [],
+    privacy_classification: privacy(input),
+    immutable_history_refs: input.immutable_history_refs,
+    approver_role: "human_authority",
+    approver_principal_id: "genesis-owner",
+    requester: input.requester,
+    actor: input.actor,
+    action_class: input.action_class,
+    scope: input.scope,
+    evidence_snapshot: input.evidence_snapshot,
+    limits: input.limits,
+    decision: input.decision,
+    rationale: input.rationale,
+    ...times,
+    revoked: input.revoked ?? false,
+    revocation_reference: input.revocation_reference ?? null,
+  };
+  return activeRegistry.validateRecord("approval_record", approval);
+}
+
+export function versionApprovalRecord(previous, changes, historyRef, clock, options = {}) {
+  const activeRegistry = resolveRegistry(options);
+  const approval = {
+    ...previous,
+    ...changes,
+    id: previous.id,
+    record_type: "approval_record",
+    schema_version: SCHEMA_VERSION,
+    policy_version: POLICY_VERSION,
+    created_at: previous.created_at,
+    updated_at: timestamp(clock),
+    affected_business: previous.affected_business,
+    approver_role: "human_authority",
+    approver_principal_id: "genesis-owner",
+    immutable_history_refs: [...new Set([
+      ...previous.immutable_history_refs,
+      historyRef,
+    ])],
+  };
+  validateApprovalAuthority(approval);
+  approvalTimes(approval, approval.issued_at);
+  return activeRegistry.validateRecord("approval_record", approval);
 }

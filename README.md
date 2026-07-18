@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**A local-first, human-governed engine for turning business opportunities into evidence-backed experiment plans.**
+**A local-first, human-governed engine for turning business opportunities into approved, bounded experiments.**
 
 [![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Validation](https://img.shields.io/badge/policy-validated-2563eb)](./scripts/validate-genesis.mjs)
@@ -12,7 +12,7 @@
 
 </div>
 
-> Genesis helps you define an opportunity, preserve evidence and counterevidence, inspect decision status, and preregister a bounded validation experiment. Every write is shown as a proposal and requires explicit confirmation.
+> Genesis helps you define an opportunity, preserve evidence and counterevidence, preregister a bounded validation experiment, obtain an explicit Human Authority decision, and manually move an approved experiment into the active state. Every write is shown as a proposal and requires explicit confirmation.
 
 Policy-Version: 2.0.0<br>
 Authority: Explanatory
@@ -38,19 +38,22 @@ Authority: Explanatory
 
 ## What Genesis does
 
-Genesis 2.0 currently provides a working interactive command-line workflow for the **Discover → experiment planning** part of a business lifecycle.
+Genesis 2.0 currently provides a working interactive command-line workflow for **Discover → experiment planning → Human Authority review → manual start**.
 
 It can:
 
 - register a business opportunity with a target customer, problem, hypothesis, confidence, alternatives, expected outcome, metric, owner, and review date;
 - capture an initial evidence item while creating the opportunity;
 - append supporting or contradicting evidence with source references and provenance;
-- preserve decisions, evidence, and experiments as immutable, versioned YAML records;
+- preserve decisions, evidence, experiments, and approvals as immutable, versioned YAML records;
 - require confirmation before writing any proposed record;
 - enforce JSON Schema and policy-derived workflow gates;
 - calculate early discovery and preregistration metrics;
 - create a complete validation-experiment proposal with explicit cash, labor, duration, data, and risk limits;
-- stop at `approval_pending`, keeping experiment approval and execution separate;
+- display the complete experiment and approval envelope for human review;
+- record explicit approval or denial by `genesis-owner`, with actor, scope, limits, effective time, expiry, and revocation checks;
+- require a separate manual command to move an exactly approved experiment to `active`;
+- revoke an approval and supersede an active experiment without deleting history;
 - maintain a fast local SQLite projection; and
 - rebuild that projection entirely from canonical YAML records.
 
@@ -60,23 +63,23 @@ Genesis is useful when you want a disciplined, auditable way to answer:
 2. What real problem are we trying to solve?
 3. What evidence supports or contradicts our belief?
 4. What bounded experiment would change the decision?
-5. What requires explicit human approval before anything proceeds?
+5. Has the Human Authority explicitly approved this exact experiment, actor, and limit envelope?
 
 ## What Genesis does not do
 
-The CLI stops at `approval_pending`. It does not automatically research, contact customers, execute experiments, build products, deploy software, bill customers, or operate a business.
+The CLI can record a valid approval and manually mark an approved experiment `active`, but it does not execute the experiment. It does not automatically research, contact customers, run experiment steps, build products, deploy software, bill customers, or operate a business.
 
 It also does not currently provide:
 
 - a graphical or web interface;
 - autonomous agents or external API calls;
-- automatic approval or authority inference;
-- workflow execution beyond experiment preregistration;
+- automatic approval, authority inference, or automatic workflow progression;
+- experiment task execution after the manual `active` transition;
 - experiment measurement, reflection, closure, or outcome selection commands;
 - customer relationship management, outreach, deployment, billing, or production operations; or
 - multi-user synchronization or a hosted database.
 
-The policy layer describes a broader governed business lifecycle. The implemented CLI deliberately covers only the first bounded slice.
+The policy layer describes a broader governed business lifecycle. The implemented CLI deliberately covers the governed path through manual experiment activation, not the work performed by the experiment.
 
 ## How the engine works
 
@@ -109,10 +112,14 @@ stateDiagram-v2
     Discover --> Discover: genesis add-evidence
     Discover --> ExperimentPlan: discover gate passes
     ExperimentPlan --> ApprovalPending: genesis plan-experiment
-    ApprovalPending --> ApprovalPending: genesis status
-    note right of ApprovalPending
-      Current CLI boundary.
-      Approval and execution remain human-controlled.
+    ApprovalPending --> Approved: genesis approve-experiment
+    ApprovalPending --> Denied: genesis deny-experiment
+    Approved --> Active: genesis start-experiment
+    Approved --> Revoked: genesis revoke-approval
+    Active --> Superseded: genesis revoke-approval
+    note right of Active
+      Manual lifecycle state only.
+      Genesis does not run the experiment.
     end note
 ```
 
@@ -277,9 +284,57 @@ After confirmation, Genesis writes:
 .genesis/records/experiments/bakery-experiment.v0001.yaml
 ```
 
-The opportunity then enters `approval_pending`. Version 2.0 intentionally stops here; it does not mistake a complete plan for approval or execution.
+The opportunity then enters `approval_pending`. A complete plan is not treated as approval or execution; it must pass the separate review and authority steps below.
 
-### 5. Recover the index if needed
+### 5. Review the exact approval envelope
+
+```bash
+genesis review-experiment bakery
+```
+
+This is read-only. It shows the experiment, proposed approval action, execution actor, cash/labor/duration/data/risk limits, supporting evidence snapshot, effective time, and expiry. Review it before making an authority decision.
+
+### 6. Approve or deny as Human Authority
+
+To approve:
+
+```bash
+genesis approve-experiment bakery
+```
+
+To deny instead:
+
+```bash
+genesis deny-experiment bakery
+```
+
+Genesis asks for the approver principal, requester, rationale, and exact confirmation. The approver must be the configured Human Authority, `genesis-owner`, and cannot also be the requester. Approval creates an immutable record such as:
+
+```text
+.genesis/records/approvals/bakery-experiment-approval.v0001.yaml
+```
+
+A denial is also immutable. A later approval does not rewrite it; it creates a new version that explicitly supersedes the prior decision.
+
+### 7. Manually start an approved experiment
+
+```bash
+genesis start-experiment bakery
+```
+
+Supply the execution actor recorded in the approval. Genesis revalidates the approval's scope, actor, limits, effective time, expiry, and revocation state, then proposes an experiment version with status `active`.
+
+This command records a lifecycle transition only. It does not contact anyone, collect data, invoke an agent, or perform the experiment plan.
+
+### 8. Revoke authority when necessary
+
+```bash
+genesis revoke-approval bakery
+```
+
+Revocation creates a new approval version. If the experiment is already active, Genesis also creates a superseding experiment version so the local state no longer presents it as authorized to continue. Historical files remain intact.
+
+### 9. Recover the index if needed
 
 ```bash
 genesis rebuild-index
@@ -296,6 +351,11 @@ This validates every canonical YAML record and replaces the SQLite projection wi
 | `genesis add-evidence <business-id>` | Add evidence and version the associated decision | Yes, after confirmation | `discover` |
 | `genesis status <business-id>` | Show state, gates, metrics, limits, blocked commands, and projection health | No | Unchanged |
 | `genesis plan-experiment <business-id>` | Create a complete validation-experiment preregistration | Yes, after confirmation | `approval_pending` |
+| `genesis review-experiment <business-id>` | Display the exact experiment and approval envelope for review | No | Unchanged |
+| `genesis approve-experiment <business-id>` | Record an explicit Human Authority approval | Yes, after confirmation | `approved` |
+| `genesis deny-experiment <business-id>` | Record an explicit Human Authority denial | Yes, after confirmation | `approval_denied` |
+| `genesis start-experiment <business-id>` | Revalidate approval and manually mark the experiment active | Yes, after confirmation | `active` |
+| `genesis revoke-approval <business-id>` | Revoke approval and supersede an active experiment | Yes, after confirmation | `approval_revoked` or `superseded` |
 | `genesis rebuild-index` | Validate YAML and rebuild SQLite from scratch | Replaces derived index only | Unchanged |
 | `genesis --help` | Print command usage | No | Unchanged |
 
@@ -318,8 +378,10 @@ Genesis creates this structure in the directory where you run it:
 │   │   └── <decision-id>.v0001.yaml
 │   ├── evidence/
 │   │   └── <evidence-id>.v0001.yaml
-│   └── experiments/
-│       └── <experiment-id>.v0001.yaml
+│   ├── experiments/
+│   │   └── <experiment-id>.v0001.yaml
+│   └── approvals/
+│       └── <approval-id>.v0001.yaml
 ├── .transactions/        # transient crash-recovery journals, normally empty
 ├── genesis.db
 └── workspace.lock        # exists only while an operation is active
@@ -330,7 +392,7 @@ Genesis creates this structure in the directory where you run it:
 YAML records are the source of truth. They are:
 
 - schema-validated before persistence;
-- written through a temporary file and atomic rename;
+- staged, synced, and installed with no-replace semantics;
 - permissioned locally (`0600` files and `0700` directories where supported);
 - versioned with `.v0001.yaml`, `.v0002.yaml`, and so on; and
 - protected from accidental overwrite by rejecting an existing version path.
@@ -343,6 +405,7 @@ Do not edit historical records to change what happened. Create a new version or 
 
 - every projected record version;
 - current opportunity state and latest record references;
+- approval decisions, status, actor, scope, limits, and validity dates;
 - support and contradiction counts;
 - confidence and lifecycle timestamps; and
 - blocked command events.
@@ -358,11 +421,12 @@ Genesis creates `.genesis/workspace.lock` with exclusive creation while it reads
 `genesis status <business-id>` combines canonical records with the SQLite projection and reports:
 
 - lifecycle state and next permitted command;
-- decision, evidence, and experiment counts;
+- decision, evidence, experiment, and approval counts;
 - supporting and contradicting evidence totals;
 - Discover-gate result and blockers;
 - missing experiment-preregistration fields;
 - cash, labor, duration, data, and risk limits;
+- latest approval decision, status, execution actor, expiry, validity, and exact blockers;
 - blocked commands grouped by error code;
 - YAML/SQLite projection consistency;
 - discovery duration;
@@ -432,9 +496,15 @@ Read the reported `Path` and `Correction`, add the missing information through t
 
 ### `COMMAND_UNAVAILABLE`
 
-Meaning: an experiment already exists and the current CLI has reached `approval_pending`.
+Meaning: the requested command is not valid in the opportunity's current lifecycle state—for example, attempting to approve before planning or attempting to start without an active matching approval.
 
-Use `genesis status <business-id>`. Further approval and experiment execution are outside the implemented v2.0 CLI boundary.
+Use `genesis status <business-id>` and follow its next-command guidance. Genesis will not skip review, approval, or manual-start boundaries.
+
+### Approval validity errors
+
+Errors such as `APPROVAL_EXPIRED`, `APPROVAL_REVOKED`, `APPROVAL_SCOPE_MISMATCH`, `APPROVAL_ACTOR_MISMATCH`, and `APPROVAL_LIMIT_MISMATCH` mean the approval cannot authorize the requested transition.
+
+Read the reported path and correction. Do not edit the historical YAML. Create the appropriate new approval decision through the CLI or escalate to `genesis-owner` when authority is missing or ambiguous.
 
 ### `RECORD_SCHEMA_INVALID`
 
@@ -494,7 +564,8 @@ graph TD
 |---|---|
 | `src/cli/run-cli.mjs` | Parses commands, gathers input, requests confirmation, and maps failures to exit codes |
 | `src/application/genesis-service.mjs` | Builds proposals, applies gates, serializes operations, persists records, and returns status |
-| `src/core/record-builders.mjs` | Constructs and validates evidence, decision, and experiment records |
+| `src/core/record-builders.mjs` | Constructs and validates evidence, decision, experiment, and approval records |
+| `src/core/approval-workflow.mjs` | Evaluates exact approval scope, actor, limits, authority, effective time, expiry, and revocation state |
 | `src/core/discovery-workflow.mjs` | Evaluates the Discover gate, preregistration completeness, state, and next command |
 | `src/core/metrics.mjs` | Calculates local workflow metrics from record history |
 | `src/core/schema-registry.mjs` | Loads registered schemas and performs strict runtime validation |
@@ -589,8 +660,10 @@ Current technical boundaries include:
 - one local operator and one process per workspace operation;
 - no command to list all opportunities;
 - no supported command to edit a mistaken record or create a superseding correction;
-- no approval inbox or approval-record command;
-- no transition from `approval_pending` to running, measurement, reflection, decision, or closure;
+- terminal-driven review only; no web approval inbox, authentication, signatures, or cryptographic identity proof;
+- operator identities are locally entered and type-checked, so filesystem access remains part of the trust boundary;
+- the `active` transition records authorization state but does not run experiment tasks;
+- no transition from `active` to measurement, reflection, outcome decision, or closure;
 - no automatic metric ingestion from customer or operating systems;
 - no authentication, encryption layer, remote backup, or sync;
 - no packaged npm release—the supported installation path is this repository plus `npm link`; and
@@ -600,13 +673,13 @@ Treat the broader policies as the target governance contract and the current CLI
 
 ## Project status and next steps
 
-The current engine is ready for local, controlled use to register opportunities, collect evidence, and produce reviewable experiment preregistrations. The most valuable next product increments are:
+The current engine is ready for local, controlled use to register opportunities, collect evidence, preregister experiments, record explicit Human Authority decisions, and manually activate an exactly approved plan. The most valuable next product increments are:
 
-1. **Approval workflow:** create, validate, inspect, approve, reject, expire, and revoke approval records from a human-facing interface.
-2. **Experiment execution loop:** add running, measurement, reflection, outcome, and closure commands with actual cost tracking.
-3. **Operator experience:** add opportunity listing, non-interactive structured input/output, corrections, search, and clearer status summaries.
-4. **Customer-reality integrations:** import approved evidence without granting retrieved content authority.
-5. **Build and launch gates:** implement the remaining business lifecycle only after the manual workflow is understood and appropriately approved.
+1. **Web control interface:** expose opportunity status, evidence, experiment review, approval/denial, manual start, and revocation through a clean local UI while preserving the same backend gates.
+2. **Identity and access:** authenticate operators and bind Human Authority actions to verifiable identities before any hosted or multi-user use.
+3. **Experiment execution loop:** add measurement, reflection, outcome, and closure commands with actual cost tracking; automate execution only after the manual workflow is understood and eligible.
+4. **Operator experience:** add opportunity listing, non-interactive structured input/output, corrections, search, and clearer status summaries.
+5. **Customer-reality integrations:** import approved evidence without granting retrieved content authority.
 6. **Packaging and release:** publish a versioned distribution with migration and compatibility guarantees.
 
 The guiding rule is simple: automate only what has been understood manually, and measure success through better external decisions—not more internal artifacts.

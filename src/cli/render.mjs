@@ -39,6 +39,7 @@ export function renderStatus(status) {
         ["risk_level", status.limits.risk_level],
       ])
     : "none";
+  const approvalBlockers = status.approval_validity?.blockers ?? [];
 
   return [
     `Business ID: ${status.business_id}`,
@@ -46,10 +47,17 @@ export function renderStatus(status) {
     `Next command: ${status.next_command ?? status.next_permitted_command ?? "status"}`,
     `Decision versions: ${status.decision_versions}`,
     `Experiment versions: ${status.experiment_versions}`,
+    `Approval versions: ${status.approval_versions ?? 0}`,
     `Evidence count: ${status.evidence_count}`,
     `Supporting evidence: ${status.metrics?.supporting_evidence_count ?? 0}`,
     `Contradicting evidence: ${status.metrics?.contradicting_evidence_count ?? 0}`,
     `Discover gate: ${status.discover_gate?.passed ? "passed" : "blocked"}`,
+    `Approval decision: ${status.approval?.decision ?? "none"}`,
+    `Approval status: ${status.approval?.status ?? "none"}`,
+    `Approved actor: ${status.approval?.actor ?? "none"}`,
+    `Approval expires: ${status.approval?.expires_at ?? "none"}`,
+    `Approval valid: ${status.approval_validity ? (status.approval_validity.valid ? "yes" : "no") : "not recorded"}`,
+    `Approval blockers: ${renderList(approvalBlockers.map((item) => item.code))}`,
     `Missing preregistration fields: ${renderList(status.experiment_completeness?.missing)}`,
     "Limits:",
     limits,
@@ -57,6 +65,23 @@ export function renderStatus(status) {
     `Projection consistent: ${status.projection_consistent ? "yes" : "no"}`,
     `Preregistration completeness: ${status.metrics?.preregistration_completeness ?? status.experiment_completeness?.ratio ?? 0}`,
     `Confidence history: ${(status.metrics?.confidence_history ?? []).join(", ") || "none"}`,
+  ].join("\n");
+}
+
+export function renderApprovalReview(review) {
+  const blockers = review.approval_validity?.blockers ?? [];
+  return [
+    `Business ID: ${review.business_id}`,
+    `State: ${review.state}`,
+    "Experiment awaiting Human review:",
+    YAML.stringify(review.experiment).trimEnd(),
+    "",
+    `Approval history: ${review.approval_history?.length ?? 0}`,
+    review.approval
+      ? `Latest approval:\n${YAML.stringify(review.approval).trimEnd()}`
+      : "Latest approval: none",
+    `Approval valid: ${review.approval_validity?.valid ? "yes" : "no"}`,
+    `Approval blockers: ${renderList(blockers.map((item) => `${item.code}: ${item.correction}`))}`,
   ].join("\n");
 }
 

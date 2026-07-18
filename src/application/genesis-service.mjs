@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { buildDecisionRecord, buildEvidenceEntry, buildExperimentRecord, versionDecisionRecord } from "../core/record-builders.mjs";
+import { actionClassForLimits, evaluateExperimentApproval, experimentApprovalAction, requireExperimentApproval } from "../core/approval-workflow.mjs";
+import { buildApprovalRecord, buildDecisionRecord, buildEvidenceEntry, buildExperimentRecord, versionApprovalRecord, versionDecisionRecord, versionExperimentRecord } from "../core/record-builders.mjs";
 import { evaluateDiscoverGate, buildStatus } from "../core/discovery-workflow.mjs";
 import { GenesisError } from "../core/errors.mjs";
 import { normalizeBusinessId } from "../core/ids.mjs";
@@ -32,6 +33,7 @@ function businessEntries(projectRoot, businessId) {
   const normalized = normalizeBusinessId(businessId);
   const entries = toRecordEntries(projectRoot).filter(({ descriptor, record }) => (
     (descriptor.kind === "decision" && record.affected_business === normalized)
+    || (descriptor.kind === "approval" && record.affected_business === normalized)
     || (descriptor.kind === "experiment" && record.affected_business === normalized)
     || (descriptor.kind === "evidence" && record.business_id === normalized)
   ));
@@ -39,6 +41,7 @@ function businessEntries(projectRoot, businessId) {
   return {
     entries,
     decisionEntries: entries.filter(({ descriptor }) => descriptor.kind === "decision"),
+    approvalEntries: entries.filter(({ descriptor }) => descriptor.kind === "approval"),
     experimentEntries: entries.filter(({ descriptor }) => descriptor.kind === "experiment"),
     evidenceEntries: entries.filter(({ descriptor }) => descriptor.kind === "evidence"),
   };
@@ -58,7 +61,7 @@ function existingExperimentOrThrow(experimentEntries) {
   if (experimentEntries.length > 0) {
     throw new GenesisError("COMMAND_UNAVAILABLE", "No command is available once approval pending exists", {
       path: "/next_command",
-      correction: "Use status or rebuild-index; version one does not progress beyond approval_pending",
+      correction: "Use review-experiment, approve-experiment, deny-experiment, or status for the existing plan",
       escalation: "builder",
     });
   }
@@ -89,6 +92,30 @@ function latestExperimentEntry(entries) {
   return latestDescriptor(entries.filter(({ descriptor }) => descriptor.kind === "experiment"));
 }
 
+function latestApprovalEntry(entries) {
+  return latestDescriptor(entries.filter(({ descriptor }) => descriptor.kind === "approval"));
+}
+
+function ensureExperimentExists(experimentEntries) {
+  if (experimentEntries.length === 0) {
+    throw new GenesisError("EXPERIMENT_NOT_FOUND", "Experiment plan does not exist", {
+      path: "/experiment",
+      correction: "Run genesis plan-experiment before using the approval workflow",
+      escalation: "research",
+    });
+  }
+}
+
+function requireHumanAuthority(principalId) {
+  if (principalId !== "genesis-owner") {
+    throw new GenesisError("HUMAN_AUTHORITY_REQUIRED", "This decision requires Genesis Human Authority", {
+      path: "/approver_principal_id",
+      correction: "The real Human Authority must confirm as genesis-owner",
+      escalation: "human_authority",
+    });
+  }
+}
+
 function evidenceSources(evidenceEntries) {
   return evidenceEntries.map(({ record }) => record.source_reference).filter(Boolean);
 }
@@ -99,11 +126,12 @@ function evidenceIds(evidenceEntries) {
 
 function currentStatus({ projectRoot, businessId, now }) {
   const normalized = normalizeBusinessId(businessId);
-  const { entries, decisionEntries, experimentEntries, evidenceEntries } = businessEntries(projectRoot, normalized);
+  const { entries, approvalEntries, decisionEntries, experimentEntries, evidenceEntries } = businessEntries(projectRoot, normalized);
   ensureBusinessExists(decisionEntries, normalized);
 
   const latestDecision = latestDecisionEntry(entries);
   const latestExperiment = latestExperimentEntry(entries);
+  const latestApproval = latestApprovalEntry(entries);
   const paths = workspacePaths(projectRoot);
   let consistency = { consistent: entries.length === 0, yamlCount: entries.length, projectedCount: 0 };
   let blockedCommands = [];
@@ -129,14 +157,50 @@ function currentStatus({ projectRoot, businessId, now }) {
     now,
   });
 
+  let state = status.state;
+  let nextCommand = status.next_command;
+  let approvalValidity = null;
+  if (latestApproval) {
+    const approval = latestApproval.record;
+    approvalValidity = evaluateExperimentApproval({
+      approval,
+      experiment: latestExperiment?.record,
+      actor: approval.actor,
+      now,
+    });
+    if (approval.revoked || approval.status === "revoked") {
+      state = "approval_revoked";
+      nextCommand = "review-experiment";
+    } else if (approval.decision === "denied") {
+      state = "approval_denied";
+      nextCommand = "review-experiment";
+    } else if (!approvalValidity.valid) {
+      state = "approval_invalid";
+      nextCommand = "review-experiment";
+    } else if (latestExperiment?.record.status === "draft") {
+      state = "approved";
+      nextCommand = "start-experiment";
+    }
+  } else if (status.state === "approval_pending") {
+    nextCommand = "review-experiment";
+  }
+
   return {
     business_id: normalized,
     latest_decision_version: latestDecision?.descriptor.version ?? null,
     latest_experiment_version: latestExperiment?.descriptor.version ?? null,
+    latest_approval_version: latestApproval?.descriptor.version ?? null,
     latest_decision_path: latestDecision?.descriptor.relativePath ?? null,
     latest_experiment_path: latestExperiment?.descriptor.relativePath ?? null,
+    latest_approval_path: latestApproval?.descriptor.relativePath ?? null,
+    approval_versions: approvalEntries.length,
+    approval: latestApproval?.record ?? null,
+    approval_validity: approvalValidity,
     limits: latestRecord(experimentEntries)?.limits ?? null,
     ...status,
+    state,
+    next_command: nextCommand,
+    next_permitted_command: nextCommand,
   };
 }
 
@@ -375,6 +439,191 @@ function planExperimentProposal(projectRoot, businessId, input, clock, registry)
   };
 }
 
+function approvalRecordProposal(projectRoot, businessId, input, decision, clock, registry) {
+  const normalized = normalizeBusinessId(businessId);
+  const { entries, decisionEntries, experimentEntries } = businessEntries(projectRoot, normalized);
+  ensureBusinessExists(decisionEntries, normalized);
+  ensureExperimentExists(experimentEntries);
+  requireHumanAuthority(input.approver_principal_id);
+
+  const latestExperiment = latestExperimentEntry(entries);
+  if (latestExperiment.record.status !== "draft") {
+    throw new GenesisError("COMMAND_UNAVAILABLE", "Only a draft experiment can receive an approval decision", {
+      path: "/experiment/status",
+      correction: "Use status for active or superseded experiments",
+      escalation: "human_authority",
+    });
+  }
+  const latestApproval = latestApprovalEntry(entries);
+  if (latestApproval?.record.decision === "approved" && latestApproval.record.status === "active" && !latestApproval.record.revoked) {
+    throw new GenesisError("APPROVAL_ALREADY_ACTIVE", "An active approval already exists", {
+      path: "/approval",
+      correction: "Start the experiment or revoke the existing approval",
+      escalation: "human_authority",
+    });
+  }
+
+  const experiment = latestExperiment.record;
+  const version = (latestApproval?.descriptor.version ?? 0) + 1;
+  const id = `${normalized}-experiment-approval`;
+  const currentPath = `records/approvals/${id}.v${String(version).padStart(4, "0")}.yaml`;
+  const now = clock();
+  const issuedAt = now.toISOString();
+  const deniedExpiry = new Date(now.getTime() + 7 * 86_400_000).toISOString();
+  const candidate = buildApprovalRecord({
+    id,
+    affected_business: normalized,
+    status: decision === "approved" ? "active" : "closed",
+    evidence_references: experiment.evidence_references,
+    related_records: unique([experiment.id, experiment.supported_decision]),
+    privacy_classification: experiment.privacy_classification,
+    immutable_history_refs: [currentPath],
+    approver_role: "human_authority",
+    approver_principal_id: input.approver_principal_id,
+    requester: experiment.owner,
+    actor: input.actor ?? experiment.owner,
+    action_class: actionClassForLimits(experiment.limits),
+    scope: { actions: [experimentApprovalAction(experiment.id)], wildcard: false },
+    evidence_snapshot: unique([
+      ...experiment.evidence_references,
+      ...experiment.evidence,
+      ...experiment.counterevidence,
+    ]),
+    limits: structuredClone(experiment.limits),
+    decision,
+    rationale: input.rationale,
+    issued_at: issuedAt,
+    effective_at: decision === "approved" ? (input.effective_at || issuedAt) : issuedAt,
+    expires_at: decision === "approved" ? input.expires_at : deniedExpiry,
+    review_at: decision === "approved" ? input.review_at : issuedAt,
+    revoked: false,
+    revocation_reference: null,
+  }, () => now, { registry });
+
+  const record = latestApproval
+    ? versionApprovalRecord(
+        latestApproval.record,
+        candidate,
+        latestApproval.descriptor.relativePath,
+        () => now,
+        { registry },
+      )
+    : candidate;
+
+  return {
+    command: decision === "approved" ? "approve-experiment" : "deny-experiment",
+    business_id: normalized,
+    state: decision === "approved" ? "approved" : "approval_denied",
+    record,
+    records: [{ kind: "approval", record, version }],
+  };
+}
+
+function startExperimentProposal(projectRoot, businessId, input, clock, registry) {
+  const normalized = normalizeBusinessId(businessId);
+  const { entries, decisionEntries, experimentEntries } = businessEntries(projectRoot, normalized);
+  ensureBusinessExists(decisionEntries, normalized);
+  ensureExperimentExists(experimentEntries);
+  const latestExperiment = latestExperimentEntry(entries);
+  const latestApproval = latestApprovalEntry(entries);
+  if (latestExperiment.record.status !== "draft") {
+    throw new GenesisError("COMMAND_UNAVAILABLE", "Experiment is not waiting to start", {
+      path: "/experiment/status",
+      correction: "Use status for the current experiment state",
+      escalation: "operator",
+    });
+  }
+  requireExperimentApproval({
+    approval: latestApproval?.record,
+    experiment: latestExperiment.record,
+    actor: input.actor,
+    now: clock().toISOString(),
+  });
+
+  const experiment = versionExperimentRecord(
+    latestExperiment.record,
+    {
+      status: "active",
+      approval_references: unique([
+        ...(latestExperiment.record.approval_references ?? []),
+        latestApproval.record.id,
+      ]),
+    },
+    latestExperiment.descriptor.relativePath,
+    clock,
+    { registry },
+  );
+  return {
+    command: "start-experiment",
+    business_id: normalized,
+    state: "active",
+    record: experiment,
+    records: [{
+      kind: "experiment",
+      record: experiment,
+      version: latestExperiment.descriptor.version + 1,
+    }],
+  };
+}
+
+function revokeApprovalProposal(projectRoot, businessId, input, clock, registry) {
+  const normalized = normalizeBusinessId(businessId);
+  const { entries, decisionEntries, experimentEntries } = businessEntries(projectRoot, normalized);
+  ensureBusinessExists(decisionEntries, normalized);
+  ensureExperimentExists(experimentEntries);
+  requireHumanAuthority(input.approver_principal_id);
+  const latestApproval = latestApprovalEntry(entries);
+  if (!latestApproval || latestApproval.record.status !== "active" || latestApproval.record.decision !== "approved" || latestApproval.record.revoked) {
+    throw new GenesisError("APPROVAL_NOT_ACTIVE", "No active approval is available to revoke", {
+      path: "/approval",
+      correction: "Review the latest approval record before revocation",
+      escalation: "human_authority",
+    });
+  }
+
+  const now = clock();
+  const approval = versionApprovalRecord(
+    latestApproval.record,
+    {
+      status: "revoked",
+      rationale: input.rationale,
+      revoked: true,
+      revocation_reference: `human://genesis-owner/revocation/${now.toISOString()}`,
+    },
+    latestApproval.descriptor.relativePath,
+    () => now,
+    { registry },
+  );
+  const latestExperiment = latestExperimentEntry(entries);
+  const records = [];
+  if (latestExperiment.record.status === "active") {
+    const experiment = versionExperimentRecord(
+      latestExperiment.record,
+      { status: "superseded" },
+      latestExperiment.descriptor.relativePath,
+      () => now,
+      { registry },
+    );
+    records.push({
+      kind: "experiment",
+      record: experiment,
+      version: latestExperiment.descriptor.version + 1,
+    });
+  }
+  records.push({
+    kind: "approval",
+    record: approval,
+    version: latestApproval.descriptor.version + 1,
+  });
+  return {
+    command: "revoke-approval",
+    business_id: normalized,
+    state: "approval_revoked",
+    record: approval,
+    records,
+  };
+}
+
 async function persistCommand({ projectRoot, registry, proposal, projectRecords = projectWrittenRecords }) {
   const written = [];
   const items = proposal.records ?? (proposal.record ? [
@@ -461,7 +710,7 @@ export function createGenesisService({
         command: commandName,
         business_id: proposal.business_id,
         state: status.state,
-      next_command: status.next_command,
+        next_command: status.next_command,
         status,
         record: primaryRecord,
         records: persisted.items.map((item, index) => ({
@@ -498,6 +747,58 @@ export function createGenesisService({
 
     async planExperiment(businessId, input) {
       return runWithProposal(() => planExperimentProposal(projectRoot, businessId, input, clock, activeRegistry), "plan-experiment");
+    },
+
+    async reviewExperiment(businessId) {
+      return withWorkspaceLock(projectRoot, async () => {
+        const normalized = normalizeBusinessId(businessId);
+        const { entries, approvalEntries, decisionEntries, experimentEntries } = businessEntries(projectRoot, normalized);
+        ensureBusinessExists(decisionEntries, normalized);
+        ensureExperimentExists(experimentEntries);
+        const experiment = latestExperimentEntry(entries).record;
+        const approval = latestApprovalEntry(entries)?.record ?? null;
+        return {
+          business_id: normalized,
+          state: currentStatus({ projectRoot, businessId: normalized, now: clock().toISOString() }).state,
+          experiment,
+          approval,
+          approval_history: approvalEntries.map(({ record }) => record),
+          approval_validity: evaluateExperimentApproval({
+            approval,
+            experiment,
+            actor: approval?.actor ?? experiment.owner,
+            now: clock().toISOString(),
+          }),
+        };
+      });
+    },
+
+    async approveExperiment(businessId, input) {
+      return runWithProposal(
+        () => approvalRecordProposal(projectRoot, businessId, input, "approved", clock, activeRegistry),
+        "approve-experiment",
+      );
+    },
+
+    async denyExperiment(businessId, input) {
+      return runWithProposal(
+        () => approvalRecordProposal(projectRoot, businessId, input, "denied", clock, activeRegistry),
+        "deny-experiment",
+      );
+    },
+
+    async startExperiment(businessId, input) {
+      return runWithProposal(
+        () => startExperimentProposal(projectRoot, businessId, input, clock, activeRegistry),
+        "start-experiment",
+      );
+    },
+
+    async revokeApproval(businessId, input) {
+      return runWithProposal(
+        () => revokeApprovalProposal(projectRoot, businessId, input, clock, activeRegistry),
+        "revoke-approval",
+      );
     },
 
     async status(businessId) {

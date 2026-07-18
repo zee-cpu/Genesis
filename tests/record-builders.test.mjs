@@ -5,10 +5,13 @@ import test from "node:test";
 
 import { GenesisError } from "../src/core/errors.mjs";
 import {
+  buildApprovalRecord,
   buildDecisionRecord,
   buildEvidenceEntry,
   buildExperimentRecord,
+  versionApprovalRecord,
   versionDecisionRecord,
+  versionExperimentRecord,
 } from "../src/core/record-builders.mjs";
 import { createSchemaRegistry } from "../src/core/schema-registry.mjs";
 
@@ -203,4 +206,66 @@ test("builders can validate against an injected registry", () => {
   assert.equal(recordCalls, 2);
   assert.equal(decision.recordType, "decision_record");
   assert.equal(experiment.recordType, "experiment_record");
+});
+
+test("approval and experiment versions remain canonical and immutable", () => {
+  const experiment = buildExperimentRecord(validExperimentInput, clock);
+  const approval = buildApprovalRecord({
+    id: "bakery-experiment-approval",
+    affected_business: "bakery",
+    status: "active",
+    evidence_references: experiment.evidence_references,
+    related_records: [experiment.id],
+    privacy_classification: "internal",
+    immutable_history_refs: ["records/approvals/bakery-experiment-approval.v0001.yaml"],
+    approver_role: "human_authority",
+    approver_principal_id: "genesis-owner",
+    requester: "research",
+    actor: "research",
+    action_class: "micro_experiment",
+    scope: { actions: [`start_experiment:${experiment.id}`], wildcard: false },
+    evidence_snapshot: experiment.evidence_references,
+    limits: experiment.limits,
+    decision: "approved",
+    rationale: "The bounded preregistration is complete and safe to start.",
+    effective_at: "2026-07-18T00:00:00Z",
+    expires_at: "2026-07-25T00:00:00Z",
+    review_at: "2026-07-21T00:00:00Z",
+  }, clock);
+
+  assert.equal(approval.record_type, "approval_record");
+  assert.equal(approval.approver_principal_id, "genesis-owner");
+
+  const activeExperiment = versionExperimentRecord(
+    experiment,
+    { status: "active", approval_references: [approval.id] },
+    "records/experiments/bakery-experiment.v0001.yaml",
+    clock,
+  );
+  assert.equal(activeExperiment.status, "active");
+  assert.deepEqual(activeExperiment.approval_references, [approval.id]);
+
+  const revoked = versionApprovalRecord(
+    approval,
+    {
+      status: "revoked",
+      revoked: true,
+      revocation_reference: "human://genesis-owner/revocation/2026-07-18",
+      rationale: "Approval withdrawn before further work.",
+    },
+    "records/approvals/bakery-experiment-approval.v0001.yaml",
+    clock,
+  );
+  assert.equal(revoked.status, "revoked");
+  assert.equal(revoked.revoked, true);
+
+  assert.throws(
+    () => versionApprovalRecord(
+      approval,
+      { requester: "genesis-owner" },
+      "records/approvals/bakery-experiment-approval.v0001.yaml",
+      clock,
+    ),
+    (error) => error.code === "SEPARATION_OF_DUTIES_REQUIRED",
+  );
 });

@@ -27,7 +27,7 @@ test("workspace directories are private and deterministic", () => {
     const paths = ensureWorkspace(projectRoot);
 
     assert.equal(paths.root, path.join(projectRoot, ".genesis"));
-    for (const directory of [paths.root, paths.records, paths.decisions, paths.experiments, paths.evidence]) {
+    for (const directory of [paths.root, paths.records, paths.approvals, paths.decisions, paths.experiments, paths.evidence]) {
       assert.equal(fs.existsSync(directory), true, directory);
       assert.equal(fs.statSync(directory).mode & 0o777, 0o700, directory);
     }

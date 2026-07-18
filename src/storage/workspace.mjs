@@ -11,6 +11,7 @@ export function workspacePaths(projectRoot) {
   return {
     root,
     records,
+    approvals: path.join(records, "approvals"),
     decisions: path.join(records, "decisions"),
     experiments: path.join(records, "experiments"),
     evidence: path.join(records, "evidence"),
@@ -28,6 +29,7 @@ export function ensureWorkspace(projectRoot) {
   const paths = workspacePaths(projectRoot);
   ensureDirectory(paths.root);
   ensureDirectory(paths.records);
+  ensureDirectory(paths.approvals);
   ensureDirectory(paths.decisions);
   ensureDirectory(paths.experiments);
   ensureDirectory(paths.evidence);

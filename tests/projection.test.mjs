@@ -5,8 +5,8 @@ import path from "node:path";
 import test from "node:test";
 
 import { createSchemaRegistry } from "../src/core/schema-registry.mjs";
-import { buildDecisionRecord, buildEvidenceEntry, buildExperimentRecord, versionDecisionRecord } from "../src/core/record-builders.mjs";
-import { openProjection, projectRecord, readOpportunity, projectionConsistency, rebuildProjection, recordBlockedCommand } from "../src/storage/projection.mjs";
+import { buildApprovalRecord, buildDecisionRecord, buildEvidenceEntry, buildExperimentRecord, versionDecisionRecord, versionExperimentRecord } from "../src/core/record-builders.mjs";
+import { openProjection, projectRecord, readApprovals, readOpportunity, projectionConsistency, rebuildProjection, recordBlockedCommand } from "../src/storage/projection.mjs";
 import { ensureWorkspace, workspacePaths } from "../src/storage/workspace.mjs";
 import { listRecords, writeRecord } from "../src/storage/yaml-record-store.mjs";
 
@@ -284,6 +284,77 @@ test("rebuildProjection preserves the prior database when YAML validation fails"
     );
 
     assert.deepEqual(fs.readFileSync(dbPath), before);
+  } finally {
+    cleanupProjectRoot(projectRoot);
+  }
+});
+
+test("approval projection records Human decisions and rebuilds approval state", { concurrency: false }, async () => {
+  const projectRoot = makeProjectRoot();
+  try {
+    const registry = createSchemaRegistry(ROOT);
+    const decision = buildDecisionRecord(decisionInput, clock1);
+    const experiment = buildExperimentRecord(experimentInput, clock2);
+    const approval = buildApprovalRecord({
+      id: "bakery-experiment-approval",
+      affected_business: "bakery",
+      status: "active",
+      evidence_references: experiment.evidence_references,
+      related_records: [experiment.id],
+      privacy_classification: "internal",
+      immutable_history_refs: ["records/approvals/bakery-experiment-approval.v0001.yaml"],
+      approver_role: "human_authority",
+      approver_principal_id: "genesis-owner",
+      requester: "research",
+      actor: "research",
+      action_class: "micro_experiment",
+      scope: { actions: ["start_experiment:bakery-experiment"], wildcard: false },
+      evidence_snapshot: experiment.evidence_references,
+      limits: experiment.limits,
+      decision: "approved",
+      rationale: "The bounded experiment is ready for manual start.",
+      effective_at: "2026-07-17T09:00:00Z",
+      expires_at: "2026-07-24T09:00:00Z",
+      review_at: "2026-07-20T09:00:00Z",
+    }, clock2);
+    const activeExperiment = versionExperimentRecord(
+      experiment,
+      { status: "active", approval_references: [approval.id] },
+      "records/experiments/bakery-experiment.v0001.yaml",
+      clock2,
+    );
+
+    const written = [];
+    for (const [kind, record, version] of [
+      ["decision", decision, 1],
+      ["experiment", experiment, 1],
+      ["experiment", activeExperiment, 2],
+      ["approval", approval, 1],
+    ]) {
+      const saved = await writeRecord({ projectRoot, kind, id: record.id, version, value: record });
+      written.push({ kind, record, saved, version });
+    }
+    const db = openProjection(workspacePaths(projectRoot).db);
+    for (const item of written) {
+      projectRecord(db, descriptorFor(item.kind, item.saved, item.record, item.version), item.record);
+    }
+
+    assert.equal(readOpportunity(db, "bakery").state, "active");
+    assert.equal(readOpportunity(db, "bakery").latest_approval_path, written[3].saved.relativePath);
+    assert.deepEqual(readApprovals(db, "bakery").map((row) => ({
+      decision: row.decision,
+      status: row.status,
+      actor: row.actor,
+      revoked: row.revoked,
+    })), [{ decision: "approved", status: "active", actor: "research", revoked: 0 }]);
+    db.close();
+
+    fs.rmSync(workspacePaths(projectRoot).db, { force: true });
+    assert.deepEqual(rebuildProjection({ projectRoot, registry }), { recordCount: 4, businessCount: 1 });
+    const rebuilt = openProjection(workspacePaths(projectRoot).db);
+    assert.equal(readOpportunity(rebuilt, "bakery").state, "active");
+    assert.equal(readApprovals(rebuilt, "bakery").length, 1);
+    rebuilt.close();
   } finally {
     cleanupProjectRoot(projectRoot);
   }

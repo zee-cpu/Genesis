@@ -5,7 +5,7 @@ import { createGenesisService } from "../application/genesis-service.mjs";
 import { suggestionsFor } from "../core/suggestions.mjs";
 import { GenesisError, formatError } from "../core/errors.mjs";
 import { createPrompter } from "./prompter.mjs";
-import { renderCliError, renderProposal, renderRebuildResult, renderStatus } from "./render.mjs";
+import { renderApprovalReview, renderCliError, renderProposal, renderRebuildResult, renderStatus } from "./render.mjs";
 
 const HELP = [
   "Usage:",
@@ -13,6 +13,11 @@ const HELP = [
   "  genesis add-evidence <business-id>",
   "  genesis status <business-id>",
   "  genesis plan-experiment <business-id>",
+  "  genesis review-experiment <business-id>",
+  "  genesis approve-experiment <business-id>",
+  "  genesis deny-experiment <business-id>",
+  "  genesis start-experiment <business-id>",
+  "  genesis revoke-approval <business-id>",
   "  genesis rebuild-index",
 ].join("\n");
 
@@ -162,6 +167,25 @@ async function gatherPlanExperimentInput(prompter, output, currentDecisionId) {
   };
 }
 
+async function gatherApprovalDecisionInput(prompter, experiment, decision) {
+  const approver_principal_id = await prompter.ask("Human Authority principal (type genesis-owner): ");
+  const actor = await prompter.ask(`Approved experiment actor [${experiment.owner}]: `) || experiment.owner;
+  const rationale = await prompter.ask(`${decision === "approved" ? "Approval" : "Denial"} rationale: `);
+  if (decision === "denied") {
+    return { approver_principal_id, actor, rationale };
+  }
+  const effective_at = await prompter.ask("Effective at (ISO timestamp; blank for now): ");
+  const expires_at = await prompter.ask("Expires at (ISO timestamp): ");
+  const review_at = await prompter.ask("Review at (ISO timestamp): ");
+  return { approver_principal_id, actor, rationale, effective_at, expires_at, review_at };
+}
+
+async function gatherRevocationInput(prompter) {
+  const approver_principal_id = await prompter.ask("Human Authority principal (type genesis-owner): ");
+  const rationale = await prompter.ask("Revocation rationale: ");
+  return { approver_principal_id, rationale };
+}
+
 function usage(output) {
   writeLine(output, HELP);
 }
@@ -262,6 +286,75 @@ export async function runCli(argv, dependencies = {}) {
       if (result.warning) {
         writeLine(errorOutput, renderCliError(result.warning));
       }
+      writeLine(output, renderStatus(result.status));
+      return 0;
+    }
+
+    if (command === "review-experiment") {
+      if (!businessId) {
+        usage(output);
+        return 2;
+      }
+      const review = await service.reviewExperiment(businessId);
+      writeLine(output, renderApprovalReview(review));
+      return 0;
+    }
+
+    if (command === "approve-experiment" || command === "deny-experiment") {
+      if (!businessId) {
+        usage(output);
+        return 2;
+      }
+      const review = await service.reviewExperiment(businessId);
+      writeLine(output, renderApprovalReview(review));
+      const decision = command === "approve-experiment" ? "approved" : "denied";
+      const inputData = await gatherApprovalDecisionInput(prompter, review.experiment, decision);
+      const result = decision === "approved"
+        ? await service.approveExperiment(businessId, inputData)
+        : await service.denyExperiment(businessId, inputData);
+      if (!result.changed) {
+        writeLine(output, "Cancelled.");
+        return 0;
+      }
+      if (result.warning) writeLine(errorOutput, renderCliError(result.warning));
+      writeLine(output, renderStatus(result.status));
+      return 0;
+    }
+
+    if (command === "start-experiment") {
+      if (!businessId) {
+        usage(output);
+        return 2;
+      }
+      const review = await service.reviewExperiment(businessId);
+      writeLine(output, renderApprovalReview(review));
+      const actor = await prompter.ask(`Experiment actor [${review.approval?.actor ?? review.experiment.owner}]: `)
+        || review.approval?.actor
+        || review.experiment.owner;
+      const result = await service.startExperiment(businessId, { actor });
+      if (!result.changed) {
+        writeLine(output, "Cancelled.");
+        return 0;
+      }
+      if (result.warning) writeLine(errorOutput, renderCliError(result.warning));
+      writeLine(output, renderStatus(result.status));
+      return 0;
+    }
+
+    if (command === "revoke-approval") {
+      if (!businessId) {
+        usage(output);
+        return 2;
+      }
+      const review = await service.reviewExperiment(businessId);
+      writeLine(output, renderApprovalReview(review));
+      const inputData = await gatherRevocationInput(prompter);
+      const result = await service.revokeApproval(businessId, inputData);
+      if (!result.changed) {
+        writeLine(output, "Cancelled.");
+        return 0;
+      }
+      if (result.warning) writeLine(errorOutput, renderCliError(result.warning));
       writeLine(output, renderStatus(result.status));
       return 0;
     }

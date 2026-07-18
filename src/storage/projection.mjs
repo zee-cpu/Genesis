@@ -16,13 +16,14 @@ function tempDbPathFor(projectRoot) {
 }
 
 function recordTypeForKind(kind) {
+  if (kind === "approval") return "approval_record";
   if (kind === "decision") return "decision_record";
   if (kind === "experiment") return "experiment_record";
   if (kind === "evidence") return "evidence_entry";
 
   throw new GenesisError("RECORD_KIND_INVALID", "Record kind is not supported", {
     path: "/kind",
-    correction: "Use decision, experiment, or evidence",
+    correction: "Use approval, decision, experiment, or evidence",
     escalation: "builder",
   });
 }
@@ -46,12 +47,26 @@ function schemaSql() {
       updated_at TEXT NOT NULL,
       latest_decision_path TEXT NOT NULL,
       latest_experiment_path TEXT,
+      latest_approval_path TEXT,
       support_count INTEGER NOT NULL,
       contradict_count INTEGER NOT NULL,
       confidence REAL NOT NULL,
       discover_started_at TEXT NOT NULL,
       validation_planned_at TEXT,
       projection_consistent INTEGER NOT NULL DEFAULT 1
+    );
+    CREATE TABLE IF NOT EXISTS approval_records (
+      approval_id TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      business_id TEXT NOT NULL,
+      decision TEXT NOT NULL,
+      status TEXT NOT NULL,
+      actor TEXT NOT NULL,
+      scope_action TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      revoked INTEGER NOT NULL,
+      relative_path TEXT NOT NULL UNIQUE,
+      PRIMARY KEY (approval_id, version)
     );
     CREATE TABLE IF NOT EXISTS blocked_commands (
       id INTEGER PRIMARY KEY,
@@ -72,6 +87,7 @@ function createOpportunityDefaults(businessId, decisionId, startedAt) {
     updated_at: startedAt,
     latest_decision_path: "",
     latest_experiment_path: null,
+    latest_approval_path: null,
     support_count: 0,
     contradict_count: 0,
     confidence: 0,
@@ -95,6 +111,7 @@ function upsertOpportunity(db, values) {
         updated_at: values.updated_at ?? current.updated_at,
         latest_decision_path: values.latest_decision_path ?? current.latest_decision_path,
         latest_experiment_path: values.latest_experiment_path ?? current.latest_experiment_path,
+        latest_approval_path: values.latest_approval_path ?? current.latest_approval_path,
         support_count: values.support_count ?? current.support_count,
         contradict_count: values.contradict_count ?? current.contradict_count,
         confidence: values.confidence ?? current.confidence,
@@ -106,12 +123,12 @@ function upsertOpportunity(db, values) {
   db.prepare(`
     INSERT INTO opportunities (
       business_id, decision_id, state, created_at, updated_at, latest_decision_path,
-      latest_experiment_path, support_count, contradict_count, confidence,
+      latest_experiment_path, latest_approval_path, support_count, contradict_count, confidence,
       discover_started_at, validation_planned_at, projection_consistent
     )
     VALUES (
       @business_id, @decision_id, @state, @created_at, @updated_at, @latest_decision_path,
-      @latest_experiment_path, @support_count, @contradict_count, @confidence,
+      @latest_experiment_path, @latest_approval_path, @support_count, @contradict_count, @confidence,
       @discover_started_at, @validation_planned_at, 1
     )
     ON CONFLICT(business_id) DO UPDATE SET
@@ -121,6 +138,7 @@ function upsertOpportunity(db, values) {
       updated_at = excluded.updated_at,
       latest_decision_path = excluded.latest_decision_path,
       latest_experiment_path = excluded.latest_experiment_path,
+      latest_approval_path = excluded.latest_approval_path,
       support_count = excluded.support_count,
       contradict_count = excluded.contradict_count,
       confidence = excluded.confidence,
@@ -146,6 +164,7 @@ function upsertRecordVersion(db, descriptor, record) {
 }
 
 function recordKindForType(recordType) {
+  if (recordType === "approval_record") return "approval";
   if (recordType === "decision_record") return "decision";
   if (recordType === "experiment_record") return "experiment";
   if (recordType === "evidence_entry") return "evidence";
@@ -176,6 +195,7 @@ function projectDecision(db, descriptor, record) {
         updated_at: record.updated_at,
         latest_decision_path: descriptor.relativePath,
         latest_experiment_path: current.latest_experiment_path,
+        latest_approval_path: current.latest_approval_path,
         support_count: current.support_count,
         contradict_count: current.contradict_count,
         confidence: record.confidence,
@@ -201,6 +221,7 @@ function projectEvidence(db, record) {
     updated_at: record.collected_at,
     latest_decision_path: currentCounts.latest_decision_path ?? "",
     latest_experiment_path: currentCounts.latest_experiment_path ?? null,
+    latest_approval_path: currentCounts.latest_approval_path ?? null,
     support_count: currentCounts.support_count + (record.stance === "support" ? 1 : 0),
     contradict_count: currentCounts.contradict_count + (record.stance === "contradict" ? 1 : 0),
     confidence: currentCounts.confidence,
@@ -220,6 +241,7 @@ function projectExperiment(db, descriptor, record) {
         updated_at: record.updated_at,
         latest_decision_path: current.latest_decision_path,
         latest_experiment_path: descriptor.relativePath,
+        latest_approval_path: current.latest_approval_path,
         support_count: current.support_count,
         contradict_count: current.contradict_count,
         confidence: current.confidence,
@@ -234,18 +256,71 @@ function projectExperiment(db, descriptor, record) {
       });
 }
 
+function projectApproval(db, descriptor, record) {
+  db.prepare(`
+    INSERT INTO approval_records (
+      approval_id, version, business_id, decision, status, actor,
+      scope_action, expires_at, revoked, relative_path
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(approval_id, version) DO UPDATE SET
+      decision = excluded.decision,
+      status = excluded.status,
+      actor = excluded.actor,
+      scope_action = excluded.scope_action,
+      expires_at = excluded.expires_at,
+      revoked = excluded.revoked,
+      relative_path = excluded.relative_path
+  `).run(
+    record.id,
+    descriptor.version,
+    record.affected_business,
+    record.decision,
+    record.status,
+    record.actor,
+    record.scope.actions[0],
+    record.expires_at,
+    record.revoked ? 1 : 0,
+    descriptor.relativePath,
+  );
+
+  const current = getOpportunity(db, record.affected_business);
+  if (!current) return;
+  const state = record.revoked || record.status === "revoked"
+    ? "approval_revoked"
+    : record.decision === "denied"
+      ? "approval_denied"
+      : ["active", "closed", "superseded"].includes(current.state)
+        ? current.state
+        : "approved";
+  upsertOpportunity(db, {
+    ...current,
+    state,
+    updated_at: record.updated_at,
+    latest_approval_path: descriptor.relativePath,
+  });
+}
+
 export function openProjection(dbPath) {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true, mode: 0o700 });
   fs.chmodSync(path.dirname(dbPath), 0o700);
   const db = new Database(dbPath);
   db.pragma("foreign_keys = ON");
   db.exec(schemaSql());
+  const opportunityColumns = new Set(db.pragma("table_info(opportunities)").map((column) => column.name));
+  if (!opportunityColumns.has("latest_approval_path")) {
+    db.exec("ALTER TABLE opportunities ADD COLUMN latest_approval_path TEXT");
+  }
   return db;
 }
 
 export function projectRecord(db, descriptor, record) {
   const transaction = db.transaction(() => {
     const inserted = upsertRecordVersion(db, descriptor, record);
+
+    if (descriptor.kind === "approval") {
+      projectApproval(db, descriptor, record);
+      return;
+    }
 
     if (descriptor.kind === "decision") {
       projectDecision(db, descriptor, record);
@@ -266,7 +341,7 @@ export function projectRecord(db, descriptor, record) {
 
     throw new GenesisError("RECORD_KIND_INVALID", "Record kind is not supported", {
       path: "/kind",
-      correction: "Use decision, experiment, or evidence",
+      correction: "Use approval, decision, experiment, or evidence",
       escalation: "builder",
     });
   });
@@ -288,6 +363,14 @@ export function recordBlockedCommand(db, event) {
 
 export function readOpportunity(db, businessId) {
   return getOpportunity(db, businessId);
+}
+
+export function readApprovals(db, businessId) {
+  return db.prepare(`
+    SELECT * FROM approval_records
+    WHERE business_id = ?
+    ORDER BY approval_id, version
+  `).all(businessId);
 }
 
 export function projectionConsistency(db, descriptors) {
@@ -327,13 +410,24 @@ export function rebuildProjection({ projectRoot, registry }) {
 
   ensureWorkspace(projectRoot);
   const descriptors = listRecords(projectRoot);
+  const projectionOrder = new Map([
+    ["decision", 0],
+    ["evidence", 1],
+    ["experiment", 2],
+    ["approval", 3],
+  ]);
+  const orderedDescriptors = [...descriptors].sort((left, right) => (
+    projectionOrder.get(left.kind) - projectionOrder.get(right.kind)
+    || left.id.localeCompare(right.id)
+    || left.version - right.version
+  ));
   const dbPath = dbPathFor(projectRoot);
   const tempPath = tempDbPathFor(projectRoot);
   fs.rmSync(tempPath, { force: true });
 
   const db = openProjection(tempPath);
   try {
-    for (const descriptor of descriptors) {
+    for (const descriptor of orderedDescriptors) {
       let record;
       try {
         record = readRecord(descriptor.absolutePath);

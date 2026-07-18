@@ -9,6 +9,7 @@ import { GenesisError } from "../core/errors.mjs";
 import { ensureWorkspace, workspacePaths } from "./workspace.mjs";
 
 const KIND_DIRECTORIES = new Map([
+  ["approval", "approvals"],
   ["decision", "decisions"],
   ["experiment", "experiments"],
   ["evidence", "evidence"],
@@ -22,7 +23,7 @@ function recordDirectoryForKind(paths, kind) {
   if (!directory) {
     throw new GenesisError("RECORD_KIND_INVALID", "Record kind is not supported", {
       path: "/kind",
-      correction: "Use decision, experiment, or evidence",
+      correction: "Use approval, decision, experiment, or evidence",
       escalation: "builder",
     });
   }

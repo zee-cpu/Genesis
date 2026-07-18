@@ -36,6 +36,21 @@ npm run check
 
 `npm run validate` must produce no issues in the completed repository. Any failure denies the affected action; validation never silently repairs policy.
 
+## Human approval workflow
+
+After `genesis plan-experiment <business-id>` creates an experiment in `approval_pending`, use the following sequence:
+
+```bash
+genesis review-experiment <business-id>
+genesis approve-experiment <business-id>  # or deny-experiment
+genesis start-experiment <business-id>
+genesis revoke-approval <business-id>     # when authority must be withdrawn
+```
+
+Review is read-only. Approval and denial create immutable runtime approval records under `.genesis/records/approvals/`. Starting is a separate manual action that revalidates Human Authority, separation of duties, exact scope, actor, limits, effective time, expiry, and revocation state before recording the experiment as `active`. It does not perform experiment tasks. Revocation creates a new approval version and supersedes an active experiment without rewriting history.
+
+The local CLI does not authenticate or cryptographically verify the names entered by an operator. Treat access to the workspace and its operating account as part of the trust boundary. Do not expose this workflow as a hosted or multi-user service without adding identity and access controls.
+
 ## Change workflow
 
 1. Identify the external decision and affected normative files.
