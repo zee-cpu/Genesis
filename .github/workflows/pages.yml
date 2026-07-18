@@ -1,10 +1,11 @@
-name: Deploy Agentic Digital Assets
+name: Deploy Genesis Site
 
 on:
   push:
     branches: [main]
     paths:
       - .github/workflows/pages.yml
+      - site/**
       - src/experiments/001-asset-engine/public/**
   workflow_dispatch:
 
@@ -44,14 +45,8 @@ jobs:
       - name: Stage static Pages artifact
         run: |
           mkdir -p _site
+          cp -r site/. _site/
           cp src/experiments/001-asset-engine/public/agentic-digital-assets.manifest.json _site/
-          printf '%s\n' \
-            '<!doctype html>' \
-            '<html lang="en"><meta charset="utf-8">' \
-            '<title>Agentic Digital Assets</title>' \
-            '<h1>Agentic Digital Assets</h1>' \
-            '<p><a href="agentic-digital-assets.manifest.json">Open JSON manifest</a></p>' \
-            > _site/index.html
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v4
