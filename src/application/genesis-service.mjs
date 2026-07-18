@@ -346,7 +346,7 @@ function planExperimentProposal(projectRoot, businessId, input, clock, registry)
     evidence_references: evidenceReferences,
     related_records: relatedRecords,
     problem: input.problem ?? latestDecision.record.problem,
-    supported_decision: latestDecision.record.id,
+    supported_decision: input.supported_decision ?? latestDecision.record.id,
     hypothesis: input.hypothesis ?? latestDecision.record.hypothesis,
     confidence: input.confidence ?? latestDecision.record.confidence,
     evidence: input.evidence ?? supportingEvidence.map(({ record }) => record.source_reference),
