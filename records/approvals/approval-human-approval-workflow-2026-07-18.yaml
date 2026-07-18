@@ -1,0 +1,55 @@
+id: approval-human-approval-workflow-2026-07-18
+record_type: approval_record
+schema_version: 1.0.0
+policy_version: 2.0.0
+created_at: 2026-07-18T16:34:35Z
+updated_at: 2026-07-18T16:34:35Z
+owner: human_authority
+affected_business: genesis-system
+status: active
+evidence_references:
+  - conversation://current/genesis-owner/human-approval-workflow-approval
+  - git://commit/0262b64
+  - command://npm-run-check/2026-07-18/pass
+related_records:
+  - approval-cli-discovery-pipeline-2026-07-17
+privacy_classification: internal
+immutable_history_refs:
+  - record://approval-human-approval-workflow-2026-07-18/v1
+approver_role: human_authority
+approver_principal_id: genesis-owner
+requester: codex-agent
+actor: codex-agent
+action_class: protected_action
+scope:
+  actions:
+    - sandboxed_human_approval_workflow_implementation
+  wildcard: false
+evidence_snapshot:
+  - model-identity://openai/codex
+  - model-version://gpt-5
+  - tool-context://git-node-npm-local-workspace
+  - plan://human-approval-workflow/review-approve-deny-revoke-start
+  - reviewer://genesis-owner/analyst
+  - verification://genesis-owner/workflow-scope-review
+limits:
+  cash_usd: 0
+  labor_hours: 24
+  duration_days: 7
+  data_classes: [public, internal]
+  risk_level: high
+decision: approved
+rationale: >-
+  genesis-owner explicitly approved codex-agent to implement the sandboxed Human
+  Authority approval workflow. The bounded scope covers immutable runtime
+  approval records; experiment review, approval, denial, revocation, and manual
+  start commands; approval validity enforcement; lifecycle and projection
+  alignment; tests; and explanatory documentation. Automatic execution,
+  external communication, production deployment, and the web interface remain
+  excluded.
+issued_at: 2026-07-18T16:34:35Z
+effective_at: 2026-07-18T16:34:35Z
+expires_at: 2026-07-25T16:34:35Z
+review_at: 2026-07-21T16:34:35Z
+revoked: false
+revocation_reference: null
