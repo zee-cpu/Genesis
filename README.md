@@ -152,6 +152,14 @@ See the available commands:
 node bin/genesis.mjs --help
 ```
 
+For an existing opportunity, the guided operator path is:
+
+```bash
+genesis next <business-id>
+```
+
+It reads the SQLite lifecycle projection, cross-checks canonical records, explains the current state, supplies safe record defaults, and asks only for information the next transition still requires.
+
 Run directly from this repository:
 
 ```bash
@@ -350,6 +358,7 @@ This validates every canonical YAML record and replaces the SQLite projection wi
 | `genesis start-business` | Create an opportunity, its first decision, and initial evidence | Yes, after confirmation | `discover` |
 | `genesis add-evidence <business-id>` | Add evidence and version the associated decision | Yes, after confirmation | `discover` |
 | `genesis status <business-id>` | Show state, gates, metrics, limits, blocked commands, and projection health | No | Unchanged |
+| `genesis next <business-id>` | Explain the projected state and guide the next valid transition one question at a time | Only when the guided proposal is confirmed | Depends on current state |
 | `genesis plan-experiment <business-id>` | Create a complete validation-experiment preregistration | Yes, after confirmation | `approval_pending` |
 | `genesis review-experiment <business-id>` | Display the exact experiment and approval envelope for review | No | Unchanged |
 | `genesis approve-experiment <business-id>` | Record an explicit Human Authority approval | Yes, after confirmation | `approved` |
@@ -433,6 +442,8 @@ Genesis creates `.genesis/workspace.lock` with exclusive creation while it reads
 - time to validation plan;
 - preregistration completeness ratio; and
 - confidence history across decision versions.
+
+`genesis next <business-id>` is the operator-oriented companion to status. It fails closed when the projection is missing or inconsistent, derives safe values such as supported-decision references and approval timestamps, and routes the resulting proposal through the same schema, approval, append-only storage, and projection checks as the direct commands.
 
 These are early workflow metrics, not proof that a business is viable. The broader normative metric definitions live in [`config/metrics-policy.yaml`](config/metrics-policy.yaml).
 
@@ -656,7 +667,7 @@ Genesis 2.0 is a practical foundation and a working discovery CLI, but it is not
 
 Current technical boundaries include:
 
-- interactive prompts only; no flags, input file, JSON output, or non-interactive mode;
+- guided and direct interactive prompts only; no flags, input file, JSON output, or non-interactive mode;
 - one local operator and one process per workspace operation;
 - no command to list all opportunities;
 - no supported command to edit a mistaken record or create a superseding correction;
@@ -678,7 +689,7 @@ The current engine is ready for local, controlled use to register opportunities,
 1. **Web control interface:** expose opportunity status, evidence, experiment review, approval/denial, manual start, and revocation through a clean local UI while preserving the same backend gates.
 2. **Identity and access:** authenticate operators and bind Human Authority actions to verifiable identities before any hosted or multi-user use.
 3. **Experiment execution loop:** add measurement, reflection, outcome, and closure commands with actual cost tracking; automate execution only after the manual workflow is understood and eligible.
-4. **Operator experience:** add opportunity listing, non-interactive structured input/output, corrections, search, and clearer status summaries.
+4. **Operator experience:** add opportunity listing, non-interactive structured input/output, broader correction workflows, and search on top of the guided `next` command.
 5. **Customer-reality integrations:** import approved evidence without granting retrieved content authority.
 6. **Packaging and release:** publish a versioned distribution with migration and compatibility guarantees.
 

@@ -51,6 +51,16 @@ Review is read-only. Approval and denial create immutable runtime approval recor
 
 The local CLI does not authenticate or cryptographically verify the names entered by an operator. Treat access to the workspace and its operating account as part of the trust boundary. Do not expose this workflow as a hosted or multi-user service without adding identity and access controls.
 
+## Guided operator workflow
+
+For an existing opportunity, run:
+
+```bash
+genesis next <business-id>
+```
+
+The command reads the lifecycle state from SQLite, verifies that the projection matches canonical YAML, and explains the next supported action. It pulls reusable values from existing records, calculates system timestamps through the configured clock, validates typed input while prompting, and delegates every mutation to the existing service methods. During experiment approval it renders one consolidated authority envelope immediately before the final confirmation. The guided layer does not weaken schemas, approval validity, append-only storage, or rebuild behavior.
+
 ## Change workflow
 
 1. Identify the external decision and affected normative files.

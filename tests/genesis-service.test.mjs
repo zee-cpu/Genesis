@@ -154,6 +154,50 @@ await runSection("startBusiness", async () => {
   }
 });
 
+await runSection("guidedNextUsesProjectionAndLifecycleState", async () => {
+  const projectRoot = makeProjectRoot();
+  try {
+    const service = createService(projectRoot);
+    await service.startBusiness(startBusinessInput());
+
+    const discover = await service.next("bakery");
+    assert.equal(discover.state, "discover");
+    assert.equal(discover.projected_state, "discover");
+    assert.equal(discover.action, "plan_experiment");
+    assert.equal(discover.defaults.owner, "research");
+    assert.equal(discover.defaults.metric_formula, "weekly_reconciliation_minutes");
+    assert.equal(discover.defaults.decision_date, "2026-07-17T12:00:00.000Z");
+
+    await service.planExperiment("bakery", experimentInput());
+    const pending = await service.next("bakery");
+    assert.equal(pending.projected_state, "approval_pending");
+    assert.equal(pending.action, "review_experiment");
+    assert.equal(pending.defaults.approver_principal_id, "genesis-owner");
+    assert.equal(pending.defaults.actor, "research");
+    assert.equal(pending.defaults.effective_at, "2026-07-17T12:00:00.000Z");
+    assert.equal(pending.defaults.expires_at, "2026-07-24T12:00:00.000Z");
+
+    await service.approveExperiment("bakery", approvalInput());
+    const approved = await service.next("bakery");
+    assert.equal(approved.action, "start_experiment");
+    assert.equal(approved.defaults.actor, "research");
+
+    await service.startExperiment("bakery", { actor: "research" });
+    const active = await service.next("bakery");
+    assert.equal(active.projected_state, "active");
+    assert.equal(active.action, "no_transition");
+    assert.match(active.message, /does not yet automate execution/i);
+
+    fs.rmSync(workspacePaths(projectRoot).db, { force: true });
+    await assert.rejects(
+      () => service.next("bakery"),
+      (error) => error.code === "PROJECTION_STALE" && error.path === "/projection",
+    );
+  } finally {
+    cleanupProjectRoot(projectRoot);
+  }
+});
+
 await runSection("addEvidence", async () => {
   const projectRoot = makeProjectRoot();
   try {

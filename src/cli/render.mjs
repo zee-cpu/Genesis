@@ -85,6 +85,45 @@ export function renderApprovalReview(review) {
   ].join("\n");
 }
 
+export function renderNextGuidance(guidance) {
+  const blocker = guidance.blocker;
+  return [
+    `Business ID: ${guidance.business_id}`,
+    `Current state: ${guidance.state}`,
+    `SQLite state: ${guidance.projected_state}`,
+    guidance.message,
+    `Guided action: ${guidance.action}`,
+    blocker ? `Missing requirement: ${blocker.path} — ${blocker.correction}` : null,
+  ].filter(Boolean).join("\n");
+}
+
+export function renderGuidedApprovalProposal(proposal) {
+  const approval = proposal.record;
+  const review = proposal.guided_review ?? {};
+  const limits = approval.limits;
+  return [
+    "Human Authority decision envelope",
+    `Business: ${proposal.business_id}`,
+    `Decision: ${approval.decision}`,
+    `Action: ${approval.scope.actions.join(", ")}`,
+    `Actor: ${approval.actor}`,
+    `Problem: ${review.problem ?? "not recorded"}`,
+    `Hypothesis: ${review.hypothesis ?? "not recorded"}`,
+    `Metric: ${review.metric?.formula ?? "not recorded"}`,
+    `Expected outcome: ${review.expected_outcome ?? "not recorded"}`,
+    `Minimum effect: ${review.minimum_meaningful_effect ?? "not recorded"}`,
+    `Evidence: ${renderList(review.evidence)}`,
+    `Counterevidence: ${renderList(review.counterevidence)}`,
+    `Failure conditions: ${renderList(review.failure_conditions)}`,
+    `Stop conditions: ${renderList(review.stop_conditions)}`,
+    `Limits: $${limits.cash_usd} cash · ${limits.labor_hours} labor hours · ${limits.duration_days} days · ${limits.data_classes.join(", ")} data · ${limits.risk_level} risk`,
+    `Effective: ${approval.effective_at}`,
+    `Review: ${approval.review_at}`,
+    `Expires: ${approval.expires_at}`,
+    `Rationale: ${approval.rationale}`,
+  ].join("\n");
+}
+
 export function renderRebuildResult(result) {
   return [
     `Records rebuilt: ${result.recordCount}`,

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { createGenesisService } from "../src/application/genesis-service.mjs";
 import { runCli } from "../src/cli/run-cli.mjs";
 import { workspacePaths } from "../src/storage/workspace.mjs";
 
@@ -351,6 +352,107 @@ test("CLI dispatches Human review, approval, denial, start, and revocation comma
     assert.deepEqual(calls.find(([name]) => name === "start")[2], { actor: "research" });
     assert.match(output.toString(), /Experiment awaiting Human review/);
     assert.match(output.toString(), /Approval versions: 1/);
+  } finally {
+    cleanupProjectRoot(projectRoot);
+  }
+});
+
+test("guided next plans, approves, starts, and explains an active experiment", { concurrency: false }, async () => {
+  const projectRoot = makeProjectRoot();
+  const output = createBuffer();
+  try {
+    const setup = createGenesisService({
+      projectRoot,
+      repoRoot: ROOT,
+      clock: CLOCK,
+      confirm: async () => true,
+    });
+    await setup.startBusiness({
+      business_id: "bakery",
+      owner: "research",
+      target_customer: "Independent bakery owners",
+      problem: "Weekly order reconciliation takes too long",
+      hypothesis: "A clearer order view will reduce reconciliation time",
+      confidence: 0.55,
+      source_reference: "interview://owner-1",
+      summary: "Owner spends two hours on reconciliation every week",
+      stance: "support",
+      provenance: "Interview note",
+      privacy_classification: "internal",
+      counterevidence: ["Learning curve objection"],
+      alternatives: ["manual process"],
+      expected_outcome: "Weekly reconciliation takes less than one hour",
+      metric: "weekly_reconciliation_minutes",
+      decision: "run_bounded_validation",
+      review_date: "2026-07-24T12:00:00Z",
+    });
+
+    assert.equal(await runCli(["next", "bakery"], {
+      projectRoot,
+      repoRoot: ROOT,
+      clock: CLOCK,
+      output,
+      errorOutput: output,
+      prompter: createScriptedPrompter([
+        "Two hours per weekly session",
+        "Compare observed minutes with baseline",
+        "",
+        "Qualified bakery owners",
+        "Completed sessions",
+        "Observed session log",
+        "At least 60 minutes saved",
+        "Median time does not improve",
+        "Participant harm,privacy incident",
+        "0",
+        "8",
+        "7",
+        "",
+        "1",
+        "",
+        "y",
+      ], output),
+    }), 0);
+    assert.equal((await setup.status("bakery")).state, "approval_pending");
+
+    assert.equal(await runCli(["next", "bakery"], {
+      projectRoot,
+      repoRoot: ROOT,
+      clock: CLOCK,
+      output,
+      errorOutput: output,
+      prompter: createScriptedPrompter([
+        "1",
+        "The bounded experiment is ready for manual execution.",
+        "y",
+      ], output),
+    }), 0);
+    assert.equal((await setup.status("bakery")).state, "approved");
+
+    assert.equal(await runCli(["next", "bakery"], {
+      projectRoot,
+      repoRoot: ROOT,
+      clock: CLOCK,
+      output,
+      errorOutput: output,
+      prompter: createScriptedPrompter(["y"], output),
+    }), 0);
+    assert.equal((await setup.status("bakery")).state, "active");
+
+    assert.equal(await runCli(["next", "bakery"], {
+      projectRoot,
+      repoRoot: ROOT,
+      clock: CLOCK,
+      output,
+      errorOutput: output,
+      prompter: createScriptedPrompter([], output),
+    }), 0);
+
+    const text = output.toString();
+    assert.match(text, /SQLite state: discover/);
+    assert.match(text, /Human Authority decision envelope/);
+    assert.match(text, /Human Authority genesis-owner — save this decision\? \[y\/N\]/);
+    assert.match(text, /Current state: active/);
+    assert.match(text, /does not yet automate execution or measurement/);
   } finally {
     cleanupProjectRoot(projectRoot);
   }

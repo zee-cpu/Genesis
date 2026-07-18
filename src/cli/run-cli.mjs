@@ -5,13 +5,14 @@ import { createGenesisService } from "../application/genesis-service.mjs";
 import { suggestionsFor } from "../core/suggestions.mjs";
 import { GenesisError, formatError } from "../core/errors.mjs";
 import { createPrompter } from "./prompter.mjs";
-import { renderApprovalReview, renderCliError, renderProposal, renderRebuildResult, renderStatus } from "./render.mjs";
+import { renderApprovalReview, renderCliError, renderGuidedApprovalProposal, renderNextGuidance, renderProposal, renderRebuildResult, renderStatus } from "./render.mjs";
 
 const HELP = [
   "Usage:",
   "  genesis start-business",
   "  genesis add-evidence <business-id>",
   "  genesis status <business-id>",
+  "  genesis next <business-id>",
   "  genesis plan-experiment <business-id>",
   "  genesis review-experiment <business-id>",
   "  genesis approve-experiment <business-id>",
@@ -59,6 +60,32 @@ function parseNumber(value, fallback = 0) {
     });
   }
   return parsed;
+}
+
+async function askRequired(prompter, question, fallback = "") {
+  while (true) {
+    const answer = (await prompter.ask(question)).trim() || fallback;
+    if (answer) return answer;
+  }
+}
+
+async function askGuidedNumber(prompter, question, { fallback = 0, integer = false, minimum = 0 } = {}) {
+  while (true) {
+    const answer = await prompter.ask(question);
+    const value = answer.trim() ? Number(answer) : fallback;
+    if (Number.isFinite(value) && value >= minimum && (!integer || Number.isInteger(value))) {
+      return value;
+    }
+  }
+}
+
+async function askGuidedList(prompter, question, { fallback = [], allowed } = {}) {
+  while (true) {
+    const values = parseCommaList(await prompter.ask(question), fallback);
+    if (values.length > 0 && (!allowed || values.every((value) => allowed.includes(value)))) {
+      return values;
+    }
+  }
 }
 
 async function gatherStartBusinessInput(prompter, output) {
@@ -186,6 +213,66 @@ async function gatherRevocationInput(prompter) {
   return { approver_principal_id, rationale };
 }
 
+async function gatherGuidedExperimentInput(prompter, guidance) {
+  const defaults = guidance.defaults;
+  const baseline = await askRequired(prompter, "Current measurable baseline: ");
+  const comparisonMethod = await askRequired(prompter, "How will the result be compared with the baseline? ");
+  const formula = await askRequired(prompter, `Metric formula [${defaults.metric_formula}]: `, defaults.metric_formula);
+  return {
+    owner: defaults.owner,
+    supported_decision: defaults.supported_decision,
+    baseline,
+    comparison_method: comparisonMethod,
+    metric: {
+      formula,
+      population: await askRequired(prompter, "What population will be measured? "),
+      denominator: await askRequired(prompter, "What is the metric denominator? "),
+      data_source: await askRequired(prompter, "What local or approved source supplies the metric? "),
+    },
+    expected_outcome: defaults.expected_outcome,
+    minimum_meaningful_effect: await askRequired(prompter, "Smallest result that would change the decision: "),
+    failure_conditions: await askGuidedList(prompter, "Failure conditions (comma-separated): "),
+    stop_conditions: await askGuidedList(prompter, "Stop conditions (comma-separated): "),
+    limits: {
+      cash_usd: await askGuidedNumber(prompter, "Maximum cash [0]: "),
+      labor_hours: await askGuidedNumber(prompter, "Maximum labor hours [0]: "),
+      duration_days: await askGuidedNumber(prompter, "Maximum duration days [1]: ", { fallback: 1, integer: true }),
+      data_classes: await askGuidedList(prompter, "Permitted data classes [internal]: ", {
+        fallback: ["internal"],
+        allowed: ["public", "internal", "confidential"],
+      }),
+      risk_level: await prompter.choose("Risk level:", ["low", "medium", "high", "critical"]),
+    },
+    decision_date: defaults.decision_date,
+    allowed_outcomes: await askGuidedList(prompter, "Allowed outcomes [scale,pivot,learning_lab,archive,kill]: ", {
+      fallback: defaults.allowed_outcomes,
+      allowed: ["scale", "pivot", "learning_lab", "archive", "kill"],
+    }),
+  };
+}
+
+async function gatherGuidedDiscoverCorrection(prompter, guidance, output) {
+  const decisionChanges = {};
+  if (["/target_customer", "/problem", "/hypothesis"].includes(guidance.blocker?.path)) {
+    const field = guidance.blocker.path.slice(1);
+    decisionChanges[field] = await askRequired(prompter, `${guidance.blocker.correction}: `);
+  }
+  writeLine(output, "Genesis needs one confirmed evidence entry to preserve this correction.");
+  return {
+    ...await gatherAddEvidenceInput(prompter, output),
+    decision_changes: decisionChanges,
+  };
+}
+
+function writeMutationResult(result, output, errorOutput) {
+  if (!result.changed) {
+    writeLine(output, "Cancelled.");
+    return;
+  }
+  if (result.warning) writeLine(errorOutput, renderCliError(result.warning));
+  writeLine(output, renderStatus(result.status));
+}
+
 function usage(output) {
   writeLine(output, HELP);
 }
@@ -208,6 +295,10 @@ export async function runCli(argv, dependencies = {}) {
   const repoRoot = dependencies.repoRoot ?? path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
   const clock = dependencies.clock ?? (() => new Date());
   const confirm = dependencies.confirm ?? (async (proposal) => {
+    if (proposal.guided && ["approve-experiment", "deny-experiment"].includes(proposal.command)) {
+      writeLine(output, renderGuidedApprovalProposal(proposal));
+      return prompter.confirm("Human Authority genesis-owner — save this decision? [y/N] ");
+    }
     writeLine(output, renderProposal(proposal));
     return prompter.confirm("Save this immutable record? [y/N] ");
   });
@@ -265,6 +356,62 @@ export async function runCli(argv, dependencies = {}) {
       }
       const status = await service.status(businessId);
       writeLine(output, renderStatus(status));
+      return 0;
+    }
+
+    if (command === "next") {
+      if (!businessId) {
+        usage(output);
+        return 2;
+      }
+      const guidance = await service.next(businessId);
+      writeLine(output, renderNextGuidance(guidance));
+
+      if (guidance.action === "plan_experiment") {
+        const result = await service.planExperiment(
+          businessId,
+          await gatherGuidedExperimentInput(prompter, guidance),
+        );
+        writeMutationResult(result, output, errorOutput);
+        return 0;
+      }
+
+      if (guidance.action === "resolve_discover_blocker") {
+        const result = await service.addEvidence(
+          businessId,
+          await gatherGuidedDiscoverCorrection(prompter, guidance, output),
+        );
+        writeMutationResult(result, output, errorOutput);
+        return 0;
+      }
+
+      if (guidance.action === "review_experiment") {
+        const decision = await prompter.choose("Human Authority decision:", [
+          { label: "approve", value: "approved" },
+          { label: "deny", value: "denied" },
+        ]);
+        const rationale = await askRequired(prompter, `${decision === "approved" ? "Approval" : "Denial"} rationale: `);
+        const inputData = {
+          ...guidance.defaults,
+          approver_principal_id: "genesis-owner",
+          rationale,
+          guided: true,
+        };
+        const result = decision === "approved"
+          ? await service.approveExperiment(businessId, inputData)
+          : await service.denyExperiment(businessId, inputData);
+        writeMutationResult(result, output, errorOutput);
+        return 0;
+      }
+
+      if (guidance.action === "start_experiment") {
+        const result = await service.startExperiment(businessId, {
+          actor: guidance.defaults.actor,
+        });
+        writeMutationResult(result, output, errorOutput);
+        return 0;
+      }
+
       return 0;
     }
 

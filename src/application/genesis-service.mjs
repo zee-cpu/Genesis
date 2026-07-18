@@ -8,7 +8,7 @@ import { GenesisError } from "../core/errors.mjs";
 import { normalizeBusinessId } from "../core/ids.mjs";
 import { createSchemaRegistry } from "../core/schema-registry.mjs";
 import { listRecords, readRecord, writeRecords } from "../storage/yaml-record-store.mjs";
-import { openProjection, projectRecord, projectionConsistency, recordBlockedCommand, rebuildProjection } from "../storage/projection.mjs";
+import { openProjection, projectRecord, projectionConsistency, readOpportunity, recordBlockedCommand, rebuildProjection } from "../storage/projection.mjs";
 import { withWorkspaceLock, workspacePaths } from "../storage/workspace.mjs";
 
 const DEFAULT_CONFIRM = async () => true;
@@ -201,6 +201,132 @@ function currentStatus({ projectRoot, businessId, now }) {
     state,
     next_command: nextCommand,
     next_permitted_command: nextCommand,
+  };
+}
+
+function guidedApprovalTimes(clock, durationDays) {
+  const issuedAt = clock();
+  const durationMs = Math.max(1, Number(durationDays) || 1) * 86_400_000;
+  return {
+    effective_at: issuedAt.toISOString(),
+    expires_at: new Date(issuedAt.getTime() + durationMs).toISOString(),
+    review_at: new Date(issuedAt.getTime() + (durationMs / 2)).toISOString(),
+  };
+}
+
+function guidedNextStep({ projectRoot, businessId, clock }) {
+  const normalized = normalizeBusinessId(businessId);
+  const paths = workspacePaths(projectRoot);
+  if (!fs.existsSync(paths.db)) {
+    throw new GenesisError("PROJECTION_STALE", "SQLite projection is unavailable", {
+      path: "/projection",
+      correction: "Run genesis rebuild-index before using genesis next",
+      escalation: "operator",
+    });
+  }
+
+  const db = openProjection(paths.db);
+  let projected;
+  try {
+    projected = readOpportunity(db, normalized);
+  } finally {
+    db.close();
+  }
+  if (!projected) {
+    throw new GenesisError("PROJECTION_STALE", "Business is missing from the SQLite projection", {
+      path: "/projection/opportunity",
+      correction: "Run genesis rebuild-index and retry genesis next",
+      escalation: "operator",
+    });
+  }
+
+  const now = clock().toISOString();
+  const status = currentStatus({ projectRoot, businessId: normalized, now });
+  if (!status.projection_consistent) {
+    throw new GenesisError("PROJECTION_STALE", "Canonical records and SQLite projection differ", {
+      path: "/projection",
+      correction: "Run genesis rebuild-index before advancing the workflow",
+      escalation: "operator",
+    });
+  }
+
+  const { entries } = businessEntries(projectRoot, normalized);
+  const decision = latestDecisionEntry(entries)?.record ?? null;
+  const experiment = latestExperimentEntry(entries)?.record ?? null;
+  const approval = latestApprovalEntry(entries)?.record ?? null;
+  const state = status.state === "approval_invalid" ? status.state : projected.state;
+  const base = {
+    business_id: normalized,
+    state,
+    projected_state: projected.state,
+    status,
+    decision,
+    experiment,
+    approval,
+  };
+
+  if (state === "discover" && !status.discover_gate.passed) {
+    return {
+      ...base,
+      action: "resolve_discover_blocker",
+      message: "Discovery is blocked by one missing requirement.",
+      blocker: status.discover_gate.blockers[0],
+    };
+  }
+  if (state === "discover") {
+    return {
+      ...base,
+      action: "plan_experiment",
+      message: "Discovery is complete. Genesis will guide you through the remaining experiment fields.",
+      defaults: {
+        owner: decision.owner,
+        supported_decision: decision.id,
+        metric_formula: decision.metric,
+        expected_outcome: decision.expected_outcome,
+        decision_date: now,
+        allowed_outcomes: ["scale", "pivot", "learning_lab", "archive", "kill"],
+      },
+    };
+  }
+  if (["approval_pending", "approval_denied", "approval_invalid", "approval_revoked"].includes(state)) {
+    if (experiment?.status !== "draft") {
+      return {
+        ...base,
+        action: "no_transition",
+        message: "The latest experiment is not a draft, so Genesis cannot issue a new start approval.",
+      };
+    }
+    return {
+      ...base,
+      action: "review_experiment",
+      message: "The experiment is ready for one Human Authority decision.",
+      approval_history_count: businessEntries(projectRoot, normalized).approvalEntries.length,
+      defaults: {
+        approver_principal_id: "genesis-owner",
+        actor: experiment.owner,
+        ...guidedApprovalTimes(clock, experiment.limits?.duration_days),
+      },
+    };
+  }
+  if (state === "approved") {
+    return {
+      ...base,
+      action: "start_experiment",
+      message: "The approval is valid. Genesis can record the manual transition to active.",
+      defaults: { actor: approval.actor },
+    };
+  }
+  if (state === "active") {
+    return {
+      ...base,
+      action: "no_transition",
+      message: "The experiment is active. Genesis 2.0 does not yet automate execution or measurement.",
+    };
+  }
+  return {
+    ...base,
+    action: "no_transition",
+    message: `No guided transition is implemented for state ${state}.`,
   };
 }
 
@@ -514,6 +640,18 @@ function approvalRecordProposal(projectRoot, businessId, input, decision, clock,
     command: decision === "approved" ? "approve-experiment" : "deny-experiment",
     business_id: normalized,
     state: decision === "approved" ? "approved" : "approval_denied",
+    guided: input.guided === true,
+    guided_review: input.guided === true ? {
+      problem: experiment.problem,
+      hypothesis: experiment.hypothesis,
+      metric: experiment.metric,
+      expected_outcome: experiment.expected_outcome,
+      minimum_meaningful_effect: experiment.minimum_meaningful_effect,
+      failure_conditions: experiment.failure_conditions,
+      stop_conditions: experiment.stop_conditions,
+      evidence: experiment.evidence,
+      counterevidence: experiment.counterevidence,
+    } : undefined,
     record,
     records: [{ kind: "approval", record, version }],
   };
@@ -799,6 +937,14 @@ export function createGenesisService({
         () => revokeApprovalProposal(projectRoot, businessId, input, clock, activeRegistry),
         "revoke-approval",
       );
+    },
+
+    async next(businessId) {
+      return withWorkspaceLock(projectRoot, async () => guidedNextStep({
+        projectRoot,
+        businessId,
+        clock,
+      }));
     },
 
     async status(businessId) {
