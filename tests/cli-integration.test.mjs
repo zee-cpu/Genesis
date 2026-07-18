@@ -289,6 +289,21 @@ test("CLI accepts JSON proposal input and emits clean JSON read output", { concu
     assert.equal(parsed.count, 1);
     assert.equal(parsed.opportunities[0].business_id, "structured-bakery");
     assert.equal(parsed.opportunities[0].next_command, "plan-experiment");
+
+    const searchOutput = createBuffer();
+    const searchExit = await runCli(["search", "two hours", "--stance", "support", "--json"], {
+      projectRoot,
+      repoRoot: ROOT,
+      clock: CLOCK,
+      prompter: createScriptedPrompter([], searchOutput),
+      output: searchOutput,
+      errorOutput: searchOutput,
+    });
+    assert.equal(searchExit, 0);
+    const search = JSON.parse(searchOutput.toString());
+    assert.equal(search.count, 1);
+    assert.equal(search.results[0].business_id, "structured-bakery");
+    assert.equal(search.results[0].stance, "support");
   } finally {
     cleanupProjectRoot(projectRoot);
   }

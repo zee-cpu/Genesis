@@ -93,6 +93,25 @@ export function renderOpportunityList(result) {
   return lines.join("\n").trimEnd();
 }
 
+export function renderEvidenceSearch(result) {
+  if (result.results.length === 0) {
+    return `No evidence matched: ${result.query}`;
+  }
+  const lines = [`Evidence matches: ${result.count}`, `Query: ${result.query}`, ""];
+  for (const item of result.results) {
+    lines.push(
+      `${item.id} (${item.record_type})`,
+      `  Business: ${item.business_id}`,
+      `  Summary: ${item.summary}`,
+      `  Source: ${item.source_reference ?? item.path}`,
+      `  Stance: ${item.stance ?? "reviewed"}`,
+      `  Privacy: ${item.privacy_classification}`,
+      "",
+    );
+  }
+  return lines.join("\n").trimEnd();
+}
+
 export function renderApprovalReview(review) {
   const blockers = review.approval_validity?.blockers ?? [];
   return [

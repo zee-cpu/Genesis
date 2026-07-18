@@ -371,6 +371,7 @@ Read-only operator commands support machine-readable output:
 
 ```bash
 genesis list --json
+genesis search "customer phrase" --business bakery --stance contradict --json
 genesis status bakery --json
 genesis next bakery --json
 genesis review-experiment bakery --json
@@ -393,6 +394,7 @@ genesis plan-experiment bakery --input experiment-proposal.json
 | `genesis add-evidence <business-id>` | Add evidence and version the associated decision | Yes, after confirmation | `discover` |
 | `genesis correct-decision <business-id>` | Correct mutable discovery fields by appending a reasoned decision version | Yes, after confirmation | `discover` |
 | `genesis list` | List all projected opportunities with state, next action, review timing, and the first actionable blocker | No | Unchanged |
+| `genesis search <query>` | Search immutable evidence and reviewed experiences by literal keyword, business, stance, or privacy class | No | Unchanged |
 | `genesis status <business-id>` | Show state, gates, metrics, limits, blocked commands, and projection health | No | Unchanged |
 | `genesis next <business-id>` | Explain the projected state and guide the next valid transition one question at a time | Only when the guided proposal is confirmed | Depends on current state |
 | `genesis plan-experiment <business-id>` | Create a complete validation-experiment preregistration | Yes, after confirmation | `approval_pending` |
@@ -488,6 +490,8 @@ Genesis creates `.genesis/workspace.lock` with exclusive creation while it reads
 - confidence history across decision versions.
 
 `genesis list` is the read-only operator inbox. It reads opportunity identities and projected states from SQLite, verifies the index against canonical YAML, and shows the next guided action, nearest applicable review, and first actionable blocker. `genesis next <business-id>` then handles one selected opportunity. It fails closed when the projection is missing or inconsistent, derives safe values such as supported-decision references and approval timestamps, and routes the resulting proposal through the same schema, approval, append-only storage, and projection checks as the direct commands. A closed failed initiative classified `learning_lab` is routed to a new child opportunity with its own budget, owner, learning metric, monthly review, and expiry. It inherits no approval or execution authority, and its experiment still requires normal preregistration and Human Authority approval.
+
+Filter the operator inbox with `--business <id>`, `--state <state>`, `--blocked`, or `--review due|overdue|upcoming|none`. Evidence search uses literal case-insensitive matching over evidence entries and reviewed experiences; narrow it with `--business`, `--stance support|contradict`, or `--privacy public|internal|confidential|restricted`. Search never promotes a lesson or changes evidence quality.
 
 These are early workflow metrics, not proof that a business is viable. The broader normative metric definitions live in [`config/metrics-policy.yaml`](config/metrics-policy.yaml).
 
@@ -731,7 +735,7 @@ Treat the broader policies as the target governance contract and the current CLI
 
 The current engine is ready for local, controlled use across one complete governed validation lifecycle: opportunity, evidence, preregistration, approval, activation, execution evidence, measurement, reflection, Major Bet outcome decision, experience preservation, and closure. The most valuable next product increments are:
 
-1. **Operator experience:** add evidence search and filtered opportunity views on top of `list` and `next`.
+1. **Packaging and release:** produce a versioned npm package, migration contract, and release verification process.
 2. **Customer-reality integrations:** import approved evidence without granting retrieved content authority.
 3. **Packaging and release:** publish a versioned distribution with migration and compatibility guarantees.
 4. **Identity and access (deferred):** authenticate operators and bind Human Authority actions to verifiable identities before any hosted or multi-user use.

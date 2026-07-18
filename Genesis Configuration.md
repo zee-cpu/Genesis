@@ -64,12 +64,15 @@ For an existing opportunity, run:
 
 ```bash
 genesis list
+genesis search "keyword or phrase" --business <business-id>
 genesis next <business-id>
 ```
 
 `genesis list` provides a read-only operator inbox with projected state, next action, nearest review timing, and the first actionable blocker. `genesis next` reads the selected lifecycle state from SQLite, verifies that the projection matches canonical YAML, and explains the next supported action. It pulls reusable values from existing records, calculates system timestamps through the configured clock, validates typed input while prompting, and delegates every mutation to the existing service methods. During experiment approval it renders one consolidated authority envelope immediately before the final confirmation. The guided layer does not weaken schemas, approval validity, append-only storage, or rebuild behavior.
 
-Use `--json` with `list`, `status`, `next`, `review-experiment`, or `rebuild-index` for machine-readable output. Use `--input <file.json>` with a mutation command to load proposal fields without answering each prompt. Structured input still passes through the same proposal preview, schema and policy checks, immutable storage path, and final confirmation; it never supplies authority by itself.
+Use `--json` with `list`, `search`, `status`, `next`, `review-experiment`, or `rebuild-index` for machine-readable output. Use `--input <file.json>` with a mutation command to load proposal fields without answering each prompt. Structured input still passes through the same proposal preview, schema and policy checks, immutable storage path, and final confirmation; it never supplies authority by itself.
+
+Filter `genesis list` with `--business`, `--state`, `--blocked`, or `--review`. `genesis search` performs the policy-supported literal keyword and field search over immutable evidence entries and reviewed experiences, with optional `--business`, `--stance`, and `--privacy` filters. Both commands verify SQLite against canonical YAML before returning results and never modify or promote evidence.
 
 Operator mistakes are corrected through new versions, never in-place edits. `genesis correct-decision <business-id>` is limited to mutable discovery fields before an experiment exists. `genesis revise-experiment <business-id>` is limited to draft preregistrations and rejects identity, history, lifecycle, execution, and authority fields. An approved draft must have its approval revoked before revision. Every correction stores its reason, corrected fields, and superseded version path.
 

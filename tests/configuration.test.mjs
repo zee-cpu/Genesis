@@ -193,6 +193,7 @@ test("README documents the offline CLI, files, recovery, and limits", async () =
     "genesis add-evidence <business-id>",
     "genesis correct-decision <business-id>",
     "genesis list",
+    "genesis search <query>",
     "genesis status <business-id>",
     "genesis next <business-id>",
     "genesis plan-experiment <business-id>",

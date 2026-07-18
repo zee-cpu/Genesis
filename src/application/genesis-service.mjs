@@ -311,7 +311,7 @@ function nextCommandForGuidance(guidance) {
   return commands[guidance.action] ?? guidance.status.next_command ?? "status";
 }
 
-function listOpportunities({ projectRoot, clock }) {
+function listOpportunities({ projectRoot, clock, filters = {} }) {
   const paths = workspacePaths(projectRoot);
   if (!fs.existsSync(paths.db)) {
     throw new GenesisError("PROJECTION_STALE", "SQLite projection is unavailable", {
@@ -339,37 +339,118 @@ function listOpportunities({ projectRoot, clock }) {
   }
 
   const now = clock().toISOString();
+  const opportunities = rows.map((row) => {
+    const guidance = guidedNextStep({ projectRoot, businessId: row.business_id, clock });
+    const timing = reviewTiming({
+      decision: guidance.decision,
+      approval: guidance.approval,
+      state: guidance.state,
+      action: guidance.action,
+      now,
+    });
+    const blocker = listBlocker(guidance);
+    return {
+      business_id: row.business_id,
+      state: guidance.state,
+      projected_state: row.state,
+      confidence: row.confidence,
+      updated_at: row.updated_at,
+      guided_action: guidance.action,
+      next_command: nextCommandForGuidance(guidance),
+      ...timing,
+      blocker: blocker ? {
+        code: blocker.code ?? "REQUIREMENT_MISSING",
+        path: blocker.path,
+        correction: blocker.correction,
+        escalation: blocker.escalation,
+      } : null,
+    };
+  });
+  const filtered = opportunities.filter((opportunity) => (
+    (!filters.business || opportunity.business_id === normalizeBusinessId(filters.business))
+    && (!filters.state || opportunity.state === filters.state)
+    && (!filters.review || opportunity.review_status === filters.review)
+    && (!filters.blocked || opportunity.blocker !== null)
+  ));
   return {
     generated_at: now,
     projection_consistent: true,
-    count: rows.length,
-    opportunities: rows.map((row) => {
-      const guidance = guidedNextStep({ projectRoot, businessId: row.business_id, clock });
-      const timing = reviewTiming({
-        decision: guidance.decision,
-        approval: guidance.approval,
-        state: guidance.state,
-        action: guidance.action,
-        now,
+    count: filtered.length,
+    total_count: opportunities.length,
+    filters,
+    opportunities: filtered,
+  };
+}
+
+function searchEvidence({ projectRoot, query, filters = {} }) {
+  const normalizedQuery = String(query ?? "").trim().toLowerCase();
+  if (!normalizedQuery) {
+    throw new GenesisError("SEARCH_QUERY_REQUIRED", "Evidence search requires a query", {
+      path: "/query",
+      correction: "Provide a literal keyword or phrase to search",
+      escalation: "operator",
+    });
+  }
+  const paths = workspacePaths(projectRoot);
+  if (!fs.existsSync(paths.db)) {
+    throw new GenesisError("PROJECTION_STALE", "SQLite projection is unavailable", {
+      path: "/projection",
+      correction: "Run genesis rebuild-index before searching evidence",
+      escalation: "operator",
+    });
+  }
+  const descriptors = listRecords(projectRoot);
+  const db = openProjection(paths.db);
+  try {
+    if (!projectionConsistency(db, descriptors).consistent) {
+      throw new GenesisError("PROJECTION_STALE", "Canonical records and SQLite projection differ", {
+        path: "/projection",
+        correction: "Run genesis rebuild-index before searching evidence",
+        escalation: "operator",
       });
-      const blocker = listBlocker(guidance);
-      return {
-        business_id: row.business_id,
-        state: guidance.state,
-        projected_state: row.state,
-        confidence: row.confidence,
-        updated_at: row.updated_at,
-        guided_action: guidance.action,
-        next_command: nextCommandForGuidance(guidance),
-        ...timing,
-        blocker: blocker ? {
-          code: blocker.code ?? "REQUIREMENT_MISSING",
-          path: blocker.path,
-          correction: blocker.correction,
-          escalation: blocker.escalation,
-        } : null,
-      };
-    }),
+    }
+  } finally {
+    db.close();
+  }
+
+  const businessFilter = filters.business ? normalizeBusinessId(filters.business) : null;
+  const results = descriptors
+    .filter((descriptor) => ["evidence", "experience"].includes(descriptor.kind))
+    .map((descriptor) => ({ descriptor, record: readRecord(descriptor.absolutePath) }))
+    .filter(({ descriptor, record }) => {
+      const businessId = descriptor.kind === "evidence" ? record.business_id : record.affected_business;
+      if (businessFilter && businessId !== businessFilter) return false;
+      if (filters.privacy && record.privacy_classification !== filters.privacy) return false;
+      if (filters.stance && (descriptor.kind !== "evidence" || record.stance !== filters.stance)) return false;
+      const searchable = descriptor.kind === "evidence"
+        ? [record.id, record.business_id, record.source_reference, record.summary, record.provenance, record.stance]
+        : [
+            record.id, record.affected_business, record.domain, ...(record.tags ?? []), record.context,
+            record.hypothesis, record.outcome, record.actual_result, record.reflection, record.reusable_lesson,
+            ...(record.supporting_evidence ?? []), ...(record.contradicting_evidence ?? []),
+          ];
+      return searchable.some((value) => String(value ?? "").toLowerCase().includes(normalizedQuery));
+    })
+    .map(({ descriptor, record }) => ({
+      record_type: descriptor.kind === "evidence" ? "evidence_entry" : "reviewed_experience",
+      id: record.id,
+      version: descriptor.version,
+      business_id: descriptor.kind === "evidence" ? record.business_id : record.affected_business,
+      timestamp: descriptor.kind === "evidence" ? record.collected_at : record.timestamp,
+      privacy_classification: record.privacy_classification,
+      stance: descriptor.kind === "evidence" ? record.stance : null,
+      source_reference: descriptor.kind === "evidence" ? record.source_reference : null,
+      summary: descriptor.kind === "evidence" ? record.summary : record.reusable_lesson,
+      provenance: descriptor.kind === "evidence" ? record.provenance : `Reviewed experience ${record.id}`,
+      path: descriptor.relativePath,
+    }))
+    .sort((left, right) => right.timestamp.localeCompare(left.timestamp) || left.path.localeCompare(right.path));
+  return {
+    query: String(query).trim(),
+    filters,
+    count: results.length,
+    projection_consistent: true,
+    results,
   };
 }
 
@@ -2102,10 +2183,19 @@ export function createGenesisService({
       }));
     },
 
-    async list() {
+    async list(filters = {}) {
       return withWorkspaceLock(projectRoot, async () => listOpportunities({
         projectRoot,
         clock,
+        filters,
+      }));
+    },
+
+    async searchEvidence(query, filters = {}) {
+      return withWorkspaceLock(projectRoot, async () => searchEvidence({
+        projectRoot,
+        query,
+        filters,
       }));
     },
 

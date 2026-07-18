@@ -268,6 +268,37 @@ await runSection("listOpportunities", async () => {
     assert.equal(pending.opportunities[0].review_type, "human_authority_review");
     assert.equal(pending.opportunities[0].review_status, "due");
     assert.equal(pending.opportunities[0].blocker.code, "APPROVAL_REVIEW_REQUIRED");
+    const filtered = await service.list({ state: "approval_pending", blocked: true, review: "due" });
+    assert.equal(filtered.count, 1);
+    assert.equal(filtered.total_count, 1);
+    assert.equal((await service.list({ state: "active" })).count, 0);
+  } finally {
+    cleanupProjectRoot(projectRoot);
+  }
+});
+
+await runSection("searchEvidence", async () => {
+  const projectRoot = makeProjectRoot();
+  try {
+    const service = createService(projectRoot);
+    await service.startBusiness(startBusinessInput());
+    await service.addEvidence("bakery", addEvidenceInput());
+
+    const matches = await service.searchEvidence("second owner", {
+      business: "bakery",
+      stance: "contradict",
+      privacy: "internal",
+    });
+    assert.equal(matches.projection_consistent, true);
+    assert.equal(matches.count, 1);
+    assert.equal(matches.results[0].record_type, "evidence_entry");
+    assert.equal(matches.results[0].id, "bakery-evidence-002");
+    assert.equal(matches.results[0].stance, "contradict");
+    assert.equal((await service.searchEvidence("does-not-exist")).count, 0);
+    await assert.rejects(
+      () => service.searchEvidence("   "),
+      (error) => error.code === "SEARCH_QUERY_REQUIRED",
+    );
   } finally {
     cleanupProjectRoot(projectRoot);
   }

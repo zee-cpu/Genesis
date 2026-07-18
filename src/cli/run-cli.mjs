@@ -6,7 +6,7 @@ import { createGenesisService } from "../application/genesis-service.mjs";
 import { suggestionsFor } from "../core/suggestions.mjs";
 import { GenesisError, formatError } from "../core/errors.mjs";
 import { createPrompter } from "./prompter.mjs";
-import { renderApprovalReview, renderCliError, renderGuidedApprovalProposal, renderNextGuidance, renderOpportunityList, renderOutcomeDecisionProposal, renderProposal, renderRebuildResult, renderStatus } from "./render.mjs";
+import { renderApprovalReview, renderCliError, renderEvidenceSearch, renderGuidedApprovalProposal, renderNextGuidance, renderOpportunityList, renderOutcomeDecisionProposal, renderProposal, renderRebuildResult, renderStatus } from "./render.mjs";
 
 const HELP = [
   "Usage:",
@@ -16,6 +16,7 @@ const HELP = [
   "  genesis add-evidence <business-id>",
   "  genesis correct-decision <business-id>",
   "  genesis list",
+  "  genesis search <query>",
   "  genesis status <business-id>",
   "  genesis next <business-id>",
   "  genesis plan-experiment <business-id>",
@@ -33,8 +34,14 @@ const HELP = [
   "  genesis rebuild-index",
   "",
   "Options:",
-  "  --json              Machine-readable output for list, status, next, review-experiment, or rebuild-index",
+  "  --json              Machine-readable output for list, search, status, next, review-experiment, or rebuild-index",
   "  --input <file.json> Read proposal fields from JSON; final confirmation is still required",
+  "  --business <id>     Filter list or evidence search by business",
+  "  --state <state>      Filter opportunity list by lifecycle state",
+  "  --blocked            Show only opportunities with an actionable blocker",
+  "  --review <status>    Filter list by due, overdue, upcoming, or none",
+  "  --stance <stance>    Filter evidence by support or contradict",
+  "  --privacy <class>    Filter evidence by privacy classification",
 ].join("\n");
 
 function writeLine(stream, text = "") {
@@ -45,6 +52,7 @@ function parseCliOptions(values) {
   const positional = [];
   let json = false;
   let inputPath = null;
+  const filters = {};
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];
     if (value === "--json") {
@@ -61,6 +69,19 @@ function parseCliOptions(values) {
           escalation: "operator",
         });
       }
+    } else if (value === "--blocked") {
+      filters.blocked = true;
+    } else if (["--business", "--state", "--review", "--stance", "--privacy"].includes(value)) {
+      const filterValue = values[index + 1];
+      index += 1;
+      if (!filterValue) {
+        throw new GenesisError("FILTER_VALUE_REQUIRED", `${value} requires a value`, {
+          path: `/filters/${value.slice(2)}`,
+          correction: `Provide a value after ${value}`,
+          escalation: "operator",
+        });
+      }
+      filters[value.slice(2)] = filterValue;
     } else if (value.startsWith("--")) {
       throw new GenesisError("OPTION_UNKNOWN", `Unknown CLI option: ${value}`, {
         path: "/options",
@@ -71,7 +92,7 @@ function parseCliOptions(values) {
       positional.push(value);
     }
   }
-  return { positional, json, inputPath };
+  return { positional, json, inputPath, filters };
 }
 
 function readStructuredInput(projectRoot, inputPath) {
@@ -597,22 +618,36 @@ export async function runCli(argv, dependencies = {}) {
       usage(output);
       return 0;
     }
-    const jsonCommands = new Set(["list", "status", "next", "review-experiment", "rebuild-index"]);
+    const jsonCommands = new Set(["list", "search", "status", "next", "review-experiment", "rebuild-index"]);
     if (options.json && !jsonCommands.has(command)) {
       throw new GenesisError("JSON_OUTPUT_UNSUPPORTED", "JSON output is limited to read-only and rebuild commands", {
         path: "/options/json",
-        correction: "Use --json with list, status, next, review-experiment, or rebuild-index",
+        correction: "Use --json with list, search, status, next, review-experiment, or rebuild-index",
         escalation: "operator",
       });
     }
     const structuredInput = options.inputPath
       ? readStructuredInput(projectRoot, options.inputPath)
       : null;
-    const inputUnsupportedCommands = new Set(["list", "status", "review-experiment", "rebuild-index"]);
+    const inputUnsupportedCommands = new Set(["list", "search", "status", "review-experiment", "rebuild-index"]);
     if (structuredInput && inputUnsupportedCommands.has(command)) {
       throw new GenesisError("INPUT_FILE_UNSUPPORTED", "This command does not accept proposal input", {
         path: "/options/input",
         correction: "Remove --input from read-only and rebuild commands",
+        escalation: "operator",
+      });
+    }
+    const filterKeys = Object.keys(options.filters);
+    const allowedFilterKeys = command === "list"
+      ? new Set(["business", "state", "review", "blocked"])
+      : command === "search"
+        ? new Set(["business", "stance", "privacy"])
+        : new Set();
+    const unsupportedFilter = filterKeys.find((key) => !allowedFilterKeys.has(key));
+    if (unsupportedFilter) {
+      throw new GenesisError("FILTER_UNSUPPORTED", "This filter is not supported by the selected command", {
+        path: `/filters/${unsupportedFilter}`,
+        correction: "Use list filters with genesis list and evidence filters with genesis search",
         escalation: "operator",
       });
     }
@@ -704,9 +739,20 @@ export async function runCli(argv, dependencies = {}) {
     }
 
     if (command === "list") {
-      const result = await service.list();
+      const result = await service.list(options.filters);
       if (options.json) writeJson(output, result);
       else writeLine(output, renderOpportunityList(result));
+      return 0;
+    }
+
+    if (command === "search") {
+      if (!businessId) {
+        usage(output);
+        return 2;
+      }
+      const result = await service.searchEvidence(businessId, options.filters);
+      if (options.json) writeJson(output, result);
+      else writeLine(output, renderEvidenceSearch(result));
       return 0;
     }
 
