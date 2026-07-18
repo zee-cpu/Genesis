@@ -35,8 +35,8 @@ The `Package Genesis CLI` GitHub Actions workflow repeats these checks on manual
 3. Run the complete build and verification commands above.
 4. Confirm the tag exactly matches `v<package version>`.
 5. Obtain a valid Human Authority record covering the exact registry, package name, version, public claims, actor, and release window.
-6. Choose and record a software license before any public registry publication. The current package remains `UNLICENSED` and `private`.
-7. Only after authorization, enable the separately reviewed public publishing step and configure npm trusted publishing or a narrowly scoped token.
+6. Confirm the Apache-2.0 `LICENSE`, `NOTICE`, package metadata, and third-party dependency notices are present in the exact artifact.
+7. Only after publication authorization, change the package from `private`, enable the separately reviewed public publishing step, and configure npm trusted publishing or a narrowly scoped token.
 8. Verify the installed public artifact, provenance, checksums, and CLI version after publication.
 
 ## Rollback reality

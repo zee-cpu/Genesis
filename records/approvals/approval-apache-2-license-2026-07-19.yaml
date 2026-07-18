@@ -1,0 +1,47 @@
+id: approval-apache-2-license-2026-07-19
+record_type: approval_record
+schema_version: 1.0.0
+policy_version: 2.0.0
+created_at: 2026-07-18T22:28:22Z
+updated_at: 2026-07-18T22:28:22Z
+owner: human_authority
+affected_business: genesis-framework
+status: active
+evidence_references:
+  - human-authority://genesis-owner/apache-2.0/2026-07-19
+related_records: []
+privacy_classification: public
+immutable_history_refs:
+  - records/approvals/approval-apache-2-license-2026-07-19.yaml
+approver_role: human_authority
+approver_principal_id: genesis-owner
+requester: lead-developer
+actor: operator
+action_class: protected_action
+scope:
+  actions:
+    - legal_commitment:apache-2.0:genesis-2.0
+    - public_representation:license-metadata:apache-2.0
+  wildcard: false
+evidence_snapshot:
+  - human-authority://genesis-owner/apache-2.0/2026-07-19
+limits:
+  cash_usd: 0
+  labor_hours: 1
+  duration_days: 1
+  data_classes:
+    - public
+    - internal
+  risk_level: high
+decision: approved
+rationale: >-
+  Authorizing operator to license the original Genesis 2.0 code and
+  documentation under Apache License 2.0 with copyright holder zee-cpu.
+  This excludes npm publication, trademark licensing, and third-party code
+  relicensing.
+issued_at: 2026-07-18T22:28:22Z
+effective_at: 2026-07-18T22:28:22Z
+expires_at: 2026-07-19T22:28:22Z
+review_at: 2026-07-19T22:28:22Z
+revoked: false
+revocation_reference: null

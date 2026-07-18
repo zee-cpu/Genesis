@@ -44,6 +44,8 @@ try {
   const filePaths = packed.files.map((file) => file.path);
   for (const required of [
     "bin/genesis.mjs",
+    "LICENSE",
+    "NOTICE",
     "genesis.yaml",
     "src/cli/run-cli.mjs",
     "schemas/genesis.schema.json",

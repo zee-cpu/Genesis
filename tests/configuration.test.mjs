@@ -189,10 +189,10 @@ test("release-candidate packaging is allowlisted, versioned, and non-publishing"
   assert.equal(packageJson.name, "genesis-governance");
   assert.equal(packageJson.version, "2.0.0");
   assert.equal(packageJson.private, true);
-  assert.equal(packageJson.license, "UNLICENSED");
+  assert.equal(packageJson.license, "Apache-2.0");
   assert.equal(packageJson.repository.url, "git+https://github.com/zee-cpu/Genesis.git");
   assert.equal(packageJson.scripts["release:verify"], "node scripts/verify-package.mjs");
-  for (const required of ["bin/", "src/cli/", "config/", "schemas/", "templates/", "genesis.yaml"]) {
+  for (const required of ["bin/", "src/cli/", "config/", "schemas/", "templates/", "genesis.yaml", "LICENSE", "NOTICE"]) {
     assert.equal(packageJson.files.includes(required), true, required);
   }
   for (const forbidden of ["site/", "src/experiments/", "records/", "tests/"]) {
@@ -210,6 +210,14 @@ test("release-candidate packaging is allowlisted, versioned, and non-publishing"
   assert.match(releaseGuide, /Human Authority approval record/);
   assert.match(releaseGuide, /Semantic Versioning/);
   assert.match(releaseGuide, /never migrate, delete, or rewrite/i);
+
+  const [license, notice] = await Promise.all([
+    readFile(path.join(ROOT, "LICENSE"), "utf8"),
+    readFile(path.join(ROOT, "NOTICE"), "utf8"),
+  ]);
+  assert.match(license, /Apache License\s+Version 2\.0, January 2004/);
+  assert.match(license, /Copyright 2026 zee-cpu/);
+  assert.match(notice, /Copyright 2026 zee-cpu/);
 });
 
 test("README documents the offline CLI, files, recovery, and limits", async () => {

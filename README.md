@@ -200,7 +200,7 @@ npm install --global ./artifacts/genesis-governance-2.0.0.tgz
 genesis --version
 ```
 
-The tarball contains only runtime code, normative configuration, schemas, templates, and user documentation. It excludes the landing page, experiments, tests, internal approval records, and historical review artifacts. Public npm publication is not yet authorized; see [`RELEASING.md`](RELEASING.md).
+The tarball contains only runtime code, normative configuration, schemas, templates, license notices, and user documentation. It excludes the landing page, experiments, tests, internal approval records, and historical review artifacts. Public npm publication is not yet authorized; see [`RELEASING.md`](RELEASING.md).
 
 Start your first opportunity:
 
@@ -737,7 +737,7 @@ Current technical boundaries include:
 - generic follow-up is limited to closed `pivot` and `scale` outcomes; Learning Lab continuation is limited to a real failed initiative and must fit its separately recorded budget, owner, metric, monthly review, and expiry;
 - no automatic metric ingestion from customer or operating systems;
 - no authentication, encryption layer, remote backup, or sync;
-- an installable release-candidate tarball is verified locally, but public npm publication and a software license remain pending explicit Human Authority decisions; and
+- an installable Apache-2.0 release-candidate tarball is verified locally, but public npm publication remains pending explicit Human Authority approval; and
 - no full autonomous business execution.
 
 Treat the broader policies as the target governance contract and the current CLI as the first enforceable vertical slice.
@@ -752,6 +752,10 @@ The current engine is ready for local, controlled use across one complete govern
 4. **Web control interface (paused):** expose the same backend gates through a local UI only when the operator workflow is mature enough to justify it.
 
 The guiding rule is simple: automate only what has been understood manually, and measure success through better external decisions—not more internal artifacts.
+
+## License
+
+Original Genesis code and documentation are licensed under the [Apache License 2.0](LICENSE), copyright 2026 zee-cpu. The license does not grant trademark rights. Third-party dependencies remain governed by their respective licenses; see [NOTICE](NOTICE) and the locked dependency metadata.
 
 ---
 
