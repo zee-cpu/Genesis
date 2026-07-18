@@ -131,13 +131,10 @@ function upsertOpportunity(db, values) {
 }
 
 function upsertRecordVersion(db, descriptor, record) {
-  db.prepare(`
+  const result = db.prepare(`
     INSERT INTO record_versions (record_type, record_id, version, relative_path, updated_at)
     VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(record_type, record_id, version)
-    DO UPDATE SET
-      relative_path = excluded.relative_path,
-      updated_at = excluded.updated_at
+    ON CONFLICT(record_type, record_id, version) DO NOTHING
   `).run(
     descriptor.kind,
     descriptor.id,
@@ -145,6 +142,7 @@ function upsertRecordVersion(db, descriptor, record) {
     descriptor.relativePath,
     record.updated_at ?? record.collected_at ?? record.created_at ?? new Date().toISOString(),
   );
+  return result.changes === 1;
 }
 
 function recordKindForType(recordType) {
@@ -247,7 +245,7 @@ export function openProjection(dbPath) {
 
 export function projectRecord(db, descriptor, record) {
   const transaction = db.transaction(() => {
-    upsertRecordVersion(db, descriptor, record);
+    const inserted = upsertRecordVersion(db, descriptor, record);
 
     if (descriptor.kind === "decision") {
       projectDecision(db, descriptor, record);
@@ -255,7 +253,9 @@ export function projectRecord(db, descriptor, record) {
     }
 
     if (descriptor.kind === "evidence") {
-      projectEvidence(db, record);
+      if (inserted) {
+        projectEvidence(db, record);
+      }
       return;
     }
 
@@ -292,9 +292,25 @@ export function readOpportunity(db, businessId) {
 
 export function projectionConsistency(db, descriptors) {
   const yamlCount = descriptors.length;
-  const projectedCount = db.prepare("SELECT COUNT(*) AS count FROM record_versions").get().count;
+  const projected = db.prepare(`
+    SELECT record_type, record_id, version, relative_path
+    FROM record_versions
+  `).all();
+  const projectedCount = projected.length;
+  const identity = ({ kind, id, version, relativePath }) => (
+    `${kind}\u0000${id}\u0000${version}\u0000${relativePath}`
+  );
+  const yamlIdentities = new Set(descriptors.map(identity));
+  const projectedIdentities = new Set(projected.map((row) => identity({
+    kind: row.record_type,
+    id: row.record_id,
+    version: row.version,
+    relativePath: row.relative_path,
+  })));
+  const exactMatch = yamlIdentities.size === projectedIdentities.size
+    && [...yamlIdentities].every((value) => projectedIdentities.has(value));
   return {
-    consistent: yamlCount === projectedCount,
+    consistent: exactMatch,
     yamlCount,
     projectedCount,
   };

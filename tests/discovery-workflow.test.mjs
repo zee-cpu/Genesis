@@ -310,9 +310,24 @@ test("buildStatus reports missing preregistration paths for incomplete drafts", 
   });
 
   assert.equal(status.state, "discover");
-  assert.equal(status.next_command, "plan-experiment");
+  assert.equal(status.next_command, "status");
   assert.equal(status.experiment_completeness.complete, false);
   assert.equal(status.experiment_completeness.missing.includes("/metric/formula"), true);
   assert.equal(status.experiment_completeness.missing.includes("/limits/cash_usd"), true);
   assert.equal(status.experiment_completeness.missing.includes("/decision_date"), true);
+});
+
+test("buildStatus preserves non-draft experiment lifecycle states", () => {
+  for (const experimentStatus of ["active", "closed", "superseded"]) {
+    const status = buildStatus({
+      decisionVersions: [makeDecision({ version: 1, confidence: 0.5 })],
+      experimentVersions: [makeExperiment({ status: experimentStatus })],
+      evidence: [{ stance: "support" }],
+      consistency: true,
+      now: "2026-07-17T00:00:00Z",
+    });
+
+    assert.equal(status.state, experimentStatus);
+    assert.equal(status.next_command, "status");
+  }
 });

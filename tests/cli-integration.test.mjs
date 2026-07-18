@@ -258,3 +258,29 @@ test("CLI returns 2 for unknown commands and 1 for validation errors", { concurr
     cleanupProjectRoot(projectRoot);
   }
 });
+
+test("CLI rejects numeric input with trailing non-numeric characters", { concurrency: false }, async () => {
+  const projectRoot = makeProjectRoot();
+  const output = createBuffer();
+  try {
+    const exit = await runCli(["start-business"], {
+      projectRoot,
+      repoRoot: ROOT,
+      clock: CLOCK,
+      output,
+      errorOutput: output,
+      prompter: createScriptedPrompter([
+        "bakery",
+        "Independent bakery owners",
+        "Weekly order reconciliation takes too long",
+        "A clearer order view will reduce reconciliation time",
+        "0.55trailing",
+      ], output),
+    });
+    assert.equal(exit, 1);
+    assert.match(output.toString(), /INPUT_INVALID/);
+    assert.equal(fs.existsSync(path.join(projectRoot, ".genesis", "records")), false);
+  } finally {
+    cleanupProjectRoot(projectRoot);
+  }
+});

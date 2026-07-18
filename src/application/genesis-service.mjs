@@ -6,7 +6,7 @@ import { evaluateDiscoverGate, buildStatus } from "../core/discovery-workflow.mj
 import { GenesisError } from "../core/errors.mjs";
 import { normalizeBusinessId } from "../core/ids.mjs";
 import { createSchemaRegistry } from "../core/schema-registry.mjs";
-import { listRecords, readRecord, writeRecord } from "../storage/yaml-record-store.mjs";
+import { listRecords, readRecord, writeRecords } from "../storage/yaml-record-store.mjs";
 import { openProjection, projectRecord, projectionConsistency, recordBlockedCommand, rebuildProjection } from "../storage/projection.mjs";
 import { withWorkspaceLock, workspacePaths } from "../storage/workspace.mjs";
 
@@ -111,7 +111,7 @@ function currentStatus({ projectRoot, businessId, now }) {
   if (fs.existsSync(paths.db)) {
     const db = openProjection(paths.db);
     try {
-      consistency = projectionConsistency(db, entries.map(({ descriptor }) => descriptor));
+      consistency = projectionConsistency(db, listRecords(projectRoot));
       blockedCommands = db.prepare(
         "SELECT code FROM blocked_commands WHERE business_id = ? ORDER BY id",
       ).all(normalized);
@@ -385,19 +385,19 @@ async function persistCommand({ projectRoot, registry, proposal, projectRecords 
     },
   ] : []);
 
-  for (const item of items) {
-    const saved = await writeRecord({
-      projectRoot,
+  const savedRecords = await writeRecords({
+    projectRoot,
+    records: items.map((item) => ({
       kind: item.kind,
       id: item.record.id,
       version: item.version,
       value: item.record,
-    });
-    written.push({
-      ...item,
-      ...saved,
-    });
-  }
+    })),
+  });
+  written.push(...items.map((item, index) => ({
+    ...item,
+    ...savedRecords[index],
+  })));
 
   try {
     return {

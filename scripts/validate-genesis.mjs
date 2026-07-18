@@ -554,7 +554,8 @@ export function validateTransition(policySet, workflowId, from, to, context = {}
 
   if (workflowId === "business_lifecycle" && from === "validate" && to === "build") {
     const passedValidation = context.records?.some((record) => (
-      record?.record_type === "experiment_record"
+      validatesRecordSchema(policySet, "experiment_record", record)
+      && record.record_type === "experiment_record"
       && record.subtype === "validation"
       && record.status === "closed"
       && record.validation_outcome === "passed"

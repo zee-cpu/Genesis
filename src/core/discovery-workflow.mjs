@@ -159,11 +159,13 @@ export function buildStatus({ decisionVersions = [], experimentVersions = [], ev
 
   const hasExperiment = experiment !== null;
   const experimentIsComplete = experimentCompletenessResult.complete;
-  const state = hasExperiment
-    ? (experiment?.status === "draft" && experimentIsComplete ? "approval_pending" : "discover")
-    : "discover";
+  const state = !hasExperiment
+    ? "discover"
+    : experiment.status === "draft"
+      ? (experimentIsComplete ? "approval_pending" : "discover")
+      : experiment.status;
   const nextCommand = hasExperiment
-    ? (experimentIsComplete ? "status" : "plan-experiment")
+    ? "status"
     : (discoverGate.passed ? "plan-experiment" : "status");
 
   return {

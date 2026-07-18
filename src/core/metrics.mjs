@@ -7,8 +7,15 @@ import YAML from "yaml";
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const WORKFLOW_PATH = path.join(REPO_ROOT, "config", "workflows", "experiment-lifecycle.yaml");
 const WORKFLOW = YAML.parse(fs.readFileSync(WORKFLOW_PATH, "utf8"));
+if (
+  !Array.isArray(WORKFLOW?.preregistration_required_fields)
+  || WORKFLOW.preregistration_required_fields.length === 0
+  || WORKFLOW.preregistration_required_fields.some((field) => typeof field !== "string" || field.trim().length === 0)
+) {
+  throw new Error("Workflow preregistration_required_fields must be a non-empty string array");
+}
 const PREREGISTRATION_REQUIRED_FIELDS = Object.freeze([
-  ...(WORKFLOW.preregistration_required_fields ?? []),
+  ...WORKFLOW.preregistration_required_fields,
 ]);
 
 function toDate(value) {

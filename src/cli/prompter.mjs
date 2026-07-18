@@ -21,20 +21,26 @@ export function createPrompter({ input, output }) {
   async function choose(question, choices) {
     const normalized = normalizeChoices(choices);
     const lines = normalized.map((choice, index) => `  ${index + 1}. ${choice.label}`).join("\n");
-    const answer = (await ask(`${question}\n${lines}\n> `)).trim();
-    if (!answer) {
-      return normalized[0]?.value;
-    }
+    while (true) {
+      const answer = (await ask(`${question}\n${lines}\n> `)).trim();
+      if (!answer) {
+        return normalized[0]?.value;
+      }
 
-    const numeric = Number.parseInt(answer, 10);
-    if (Number.isInteger(numeric) && numeric >= 1 && numeric <= normalized.length) {
-      return normalized[numeric - 1].value;
-    }
+      const numeric = Number(answer);
+      if (Number.isInteger(numeric) && numeric >= 1 && numeric <= normalized.length) {
+        return normalized[numeric - 1].value;
+      }
 
-    const direct = normalized.find((choice) => (
-      choice.value === answer || choice.label === answer
-    ));
-    return direct?.value ?? normalized[0]?.value;
+      const direct = normalized.find((choice) => (
+        choice.value === answer || choice.label === answer
+      ));
+      if (direct) {
+        return direct.value;
+      }
+
+      output.write("Invalid choice. Enter a listed number, label, or value.\n");
+    }
   }
 
   async function confirm(question) {

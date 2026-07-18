@@ -45,7 +45,7 @@ function parseNumber(value, fallback = 0) {
   if (!text) {
     return fallback;
   }
-  const parsed = Number.parseFloat(text);
+  const parsed = Number(text);
   if (!Number.isFinite(parsed)) {
     throw new GenesisError("INPUT_INVALID", "Numeric input is invalid", {
       path: "/input",

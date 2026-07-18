@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import http from "node:http";
+import http2 from "node:http2";
+import https from "node:https";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -8,10 +12,20 @@ import { workspacePaths } from "../src/storage/workspace.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const FORBIDDEN_IMPORTS = [
+  "http",
   "node:http",
+  "https",
   "node:https",
+  "http2",
   "node:http2",
+  "net",
   "node:net",
+  "tls",
+  "node:tls",
+  "dgram",
+  "node:dgram",
+  "dns",
+  "node:dns",
   "undici",
   "axios",
   "openai",
@@ -114,6 +128,46 @@ function collectSourceFiles(directory, results = []) {
   return results;
 }
 
+function importedSpecifiers(source) {
+  const specifiers = new Set();
+  const patterns = [
+    /\b(?:import|export)\s+(?:[^;"']*?\s+from\s*)?["']([^"']+)["']/gu,
+    /\bimport\s*\(\s*["']([^"']+)["']\s*\)/gu,
+    /\brequire\s*\(\s*["']([^"']+)["']\s*\)/gu,
+  ];
+  for (const pattern of patterns) {
+    for (const match of source.matchAll(pattern)) {
+      specifiers.add(match[1]);
+    }
+  }
+  return specifiers;
+}
+
+function installNetworkGuards() {
+  const blocked = () => {
+    throw new Error("NETWORK_USED");
+  };
+  const targets = [
+    [http, "request"],
+    [http, "get"],
+    [https, "request"],
+    [https, "get"],
+    [http2, "connect"],
+    [net, "connect"],
+    [net, "createConnection"],
+    [net.Socket.prototype, "connect"],
+  ];
+  const originals = targets.map(([target, key]) => [target, key, target[key]]);
+  for (const [target, key] of targets) {
+    target[key] = blocked;
+  }
+  return () => {
+    for (const [target, key, value] of originals) {
+      target[key] = value;
+    }
+  };
+}
+
 test("source tree has no network-capable imports or fetch calls", { concurrency: false }, async () => {
   const sourceFiles = [
     ...collectSourceFiles(path.join(ROOT, "bin")),
@@ -122,15 +176,15 @@ test("source tree has no network-capable imports or fetch calls", { concurrency:
 
   const violations = [];
   for (const filePath of sourceFiles) {
-    const text = fs.readFileSync(filePath, "utf8");
+    const source = fs.readFileSync(filePath, "utf8");
+    const specifiers = importedSpecifiers(source);
     for (const specifier of FORBIDDEN_IMPORTS) {
-      const importPattern = new RegExp(String.raw`(?:from|import\()\s*['"]${specifier.replaceAll("/", "\\/")}['"]`, "u");
-      if (importPattern.test(text)) {
+      if (specifiers.has(specifier)) {
         violations.push(`${path.relative(ROOT, filePath)} imports ${specifier}`);
       }
     }
 
-    if (/\bfetch\s*\(/u.test(text)) {
+    if (/\bfetch\s*\(/u.test(source)) {
       violations.push(`${path.relative(ROOT, filePath)} references fetch(`);
     }
   }
@@ -142,6 +196,7 @@ test("CLI flow completes without using fetch", { concurrency: false }, async () 
   const projectRoot = makeProjectRoot();
   const output = createBuffer();
   const originalFetch = globalThis.fetch;
+  const restoreNetwork = installNetworkGuards();
   globalThis.fetch = async () => {
     throw new Error("NETWORK_USED");
   };
@@ -265,6 +320,7 @@ test("CLI flow completes without using fetch", { concurrency: false }, async () 
     assert.equal(text.includes("Businesses rebuilt: 1"), true);
   } finally {
     globalThis.fetch = originalFetch;
+    restoreNetwork();
     cleanupProjectRoot(projectRoot);
   }
 });

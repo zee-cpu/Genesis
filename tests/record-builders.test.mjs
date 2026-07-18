@@ -121,6 +121,7 @@ test("builders produce schema-valid evidence and canonical records", async () =>
 });
 
 test("builders reject restricted evidence and schema-invalid records", () => {
+  const registry = createSchemaRegistry(ROOT);
   assert.throws(
     () => buildEvidenceEntry({
       id: "bakery-ev-002",
@@ -157,6 +158,15 @@ test("builders reject restricted evidence and schema-invalid records", () => {
       && error.code === "SENSITIVE_DATA_FORBIDDEN"
       && error.path === "/limits/data_classes"
       && error.correction.includes("restricted"),
+  );
+
+  const experiment = buildExperimentRecord(validExperimentInput, clock);
+  assert.throws(
+    () => registry.validateRecord("experiment_record", {
+      ...experiment,
+      limits: { ...experiment.limits, data_classes: ["restricted"] },
+    }),
+    (error) => error.code === "RECORD_SCHEMA_INVALID" && error.path === "/limits/data_classes/0",
   );
 });
 

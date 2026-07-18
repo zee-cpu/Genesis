@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { PassThrough } from "node:stream";
 import test from "node:test";
+import { createPrompter } from "../src/cli/prompter.mjs";
 import { formatError, GenesisError } from "../src/core/errors.mjs";
 import { normalizeBusinessId, versionFileName } from "../src/core/ids.mjs";
 import { suggestionsFor } from "../src/core/suggestions.mjs";
@@ -24,4 +26,20 @@ test("suggestions are stable, offline, and immutable", () => {
   assert.equal(Object.isFrozen(first), true);
   assert.deepEqual(suggestionsFor("constructor"), []);
   assert.equal(Object.isFrozen(suggestionsFor("unsupported_topic")), true);
+});
+
+test("interactive choices reprompt instead of accepting unknown input", async () => {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  let rendered = "";
+  output.on("data", (chunk) => { rendered += chunk; });
+  const prompter = createPrompter({ input, output });
+  const selected = prompter.choose("Evidence stance:", ["support", "contradict"]);
+  input.write("not-a-choice\n");
+  await new Promise((resolve) => setImmediate(resolve));
+  input.write("2\n");
+  assert.equal(await selected, "contradict");
+  assert.match(rendered, /Invalid choice/);
+  input.end();
+  await prompter.close();
 });

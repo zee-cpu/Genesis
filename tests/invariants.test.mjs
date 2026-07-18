@@ -413,6 +413,19 @@ test("Build requires passed validation or a bounded Human-approved learning prot
   );
   assert.equal(
     transitionIssues(policySet, "business_lifecycle", "validate", "build", {
+      records: [{
+        record_type: "experiment_record",
+        subtype: "validation",
+        status: "closed",
+        validation_outcome: "passed",
+      }],
+      now: "2026-07-18T00:00:00Z",
+      actor: "codex-agent",
+    }).some((error) => error.code === "BUILD_VALIDATION_REQUIRED"),
+    true,
+  );
+  assert.equal(
+    transitionIssues(policySet, "business_lifecycle", "validate", "build", {
       records: [{ ...passedValidation, status: "active" }],
       approvals: [await activeApproval("learning_prototype_exception")],
       learningPrototype: {

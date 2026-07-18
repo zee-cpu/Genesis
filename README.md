@@ -320,6 +320,7 @@ Genesis creates this structure in the directory where you run it:
 │   │   └── <evidence-id>.v0001.yaml
 │   └── experiments/
 │       └── <experiment-id>.v0001.yaml
+├── .transactions/        # transient crash-recovery journals, normally empty
 ├── genesis.db
 └── workspace.lock        # exists only while an operation is active
 ```
@@ -350,7 +351,7 @@ SQLite is **not** authoritative. If projection fails after YAML is safely writte
 
 ### Workspace locking
 
-Genesis creates `.genesis/workspace.lock` with exclusive creation while it reads or writes the workspace. A competing operation fails with `WORKSPACE_LOCKED`, preventing concurrent local commands from racing.
+Genesis creates `.genesis/workspace.lock` with exclusive creation while it reads or writes the workspace. A competing operation fails with `WORKSPACE_LOCKED`, preventing concurrent local commands from racing. If a terminated process leaves a well-formed lock behind, Genesis verifies that the recorded PID is no longer active and reclaims the lock automatically. Ambiguous locks fail closed for manual inspection.
 
 ## Status and metrics
 
@@ -411,7 +412,7 @@ genesis status <business-id>
 
 Meaning: another Genesis operation is active, or a previous process left a stale lock.
 
-First verify that no Genesis process is still using the workspace. If a process is active, wait for it to finish. Do not remove a lock while a command is running.
+If the recorded process is active, wait for it to finish. Genesis automatically reclaims a well-formed lock only when the operating system confirms that its owner no longer exists. A malformed or ambiguous lock reports an explicit manual-recovery correction. Do not remove a lock while a command is running.
 
 ### `BUSINESS_NOT_FOUND`
 
@@ -497,7 +498,7 @@ graph TD
 | `src/core/discovery-workflow.mjs` | Evaluates the Discover gate, preregistration completeness, state, and next command |
 | `src/core/metrics.mjs` | Calculates local workflow metrics from record history |
 | `src/core/schema-registry.mjs` | Loads registered schemas and performs strict runtime validation |
-| `src/storage/yaml-record-store.mjs` | Performs append-only, atomic YAML persistence |
+| `src/storage/yaml-record-store.mjs` | Performs append-only, atomic batch persistence and interrupted-transaction recovery |
 | `src/storage/projection.mjs` | Creates, updates, checks, and rebuilds the SQLite projection |
 | `scripts/validate-genesis.mjs` | Validates the normative manifest, schemas, references, documents, and cross-file invariants |
 

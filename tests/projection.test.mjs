@@ -178,6 +178,11 @@ test("projection captures latest paths, counts, and rebuilds deterministically",
       relativePath: evidencePath.relativePath,
       version: 1,
     });
+    projectRecord(db, descriptorFor("evidence", evidencePath, evidence, 1), {
+      ...evidence,
+      relativePath: evidencePath.relativePath,
+      version: 1,
+    });
     projectRecord(db, descriptorFor("experiment", experimentPath, experiment, 1), {
       ...experiment,
       relativePath: experimentPath.relativePath,
@@ -202,6 +207,9 @@ test("projection captures latest paths, counts, and rebuilds deterministically",
       yamlCount: 4,
       projectedCount: 4,
     });
+    assert.equal(projectionConsistency(db, listRecords(projectRoot).map((descriptor, index) => (
+      index === 0 ? { ...descriptor, id: "wrong-id" } : descriptor
+    ))).consistent, false);
 
     const originalSnapshot = {
       record_versions: snapshotProjection(db).record_versions,
