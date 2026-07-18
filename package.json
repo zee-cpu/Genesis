@@ -1,8 +1,41 @@
 {
   "name": "genesis-governance",
   "version": "2.0.0",
+  "description": "A local-first governed business lifecycle CLI with append-only evidence and human approval gates.",
   "private": true,
+  "license": "UNLICENSED",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zee-cpu/Genesis.git"
+  },
+  "homepage": "https://github.com/zee-cpu/Genesis#readme",
+  "bugs": {
+    "url": "https://github.com/zee-cpu/Genesis/issues"
+  },
+  "keywords": [
+    "governance",
+    "business-lifecycle",
+    "experiments",
+    "approval-workflow",
+    "cli"
+  ],
+  "files": [
+    "bin/",
+    "src/application/",
+    "src/cli/",
+    "src/core/",
+    "src/storage/",
+    "config/",
+    "schemas/",
+    "templates/",
+    "genesis.yaml",
+    "README.md",
+    "Genesis.md",
+    "Genesis Configuration.md",
+    "CHANGELOG.md",
+    "RELEASING.md"
+  ],
   "engines": {
     "node": ">=22"
   },
@@ -13,7 +46,9 @@
     "start": "node bin/genesis.mjs",
     "validate": "node scripts/validate-genesis.mjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "npm run validate && npm test"
+    "check": "npm run validate && npm test",
+    "pack:preview": "npm pack --dry-run",
+    "release:verify": "node scripts/verify-package.mjs"
   },
   "dependencies": {
     "ajv": "8.18.0",

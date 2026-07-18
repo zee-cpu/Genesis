@@ -164,6 +164,7 @@ See the available commands:
 
 ```bash
 node bin/genesis.mjs --help
+node bin/genesis.mjs --version
 ```
 
 For an existing opportunity, the guided operator path is:
@@ -190,6 +191,16 @@ genesis --help
 ```
 
 Genesis always creates its `.genesis/` workspace in the **current working directory**. Run commands from the directory that should own the business records.
+
+To build and smoke-test the installable release-candidate tarball:
+
+```bash
+node scripts/verify-package.mjs --output artifacts
+npm install --global ./artifacts/genesis-governance-2.0.0.tgz
+genesis --version
+```
+
+The tarball contains only runtime code, normative configuration, schemas, templates, and user documentation. It excludes the landing page, experiments, tests, internal approval records, and historical review artifacts. Public npm publication is not yet authorized; see [`RELEASING.md`](RELEASING.md).
 
 Start your first opportunity:
 
@@ -726,7 +737,7 @@ Current technical boundaries include:
 - generic follow-up is limited to closed `pivot` and `scale` outcomes; Learning Lab continuation is limited to a real failed initiative and must fit its separately recorded budget, owner, metric, monthly review, and expiry;
 - no automatic metric ingestion from customer or operating systems;
 - no authentication, encryption layer, remote backup, or sync;
-- no packaged npm release—the supported installation path is this repository plus `npm link`; and
+- an installable release-candidate tarball is verified locally, but public npm publication and a software license remain pending explicit Human Authority decisions; and
 - no full autonomous business execution.
 
 Treat the broader policies as the target governance contract and the current CLI as the first enforceable vertical slice.
@@ -735,11 +746,10 @@ Treat the broader policies as the target governance contract and the current CLI
 
 The current engine is ready for local, controlled use across one complete governed validation lifecycle: opportunity, evidence, preregistration, approval, activation, execution evidence, measurement, reflection, Major Bet outcome decision, experience preservation, and closure. The most valuable next product increments are:
 
-1. **Packaging and release:** produce a versioned npm package, migration contract, and release verification process.
-2. **Customer-reality integrations:** import approved evidence without granting retrieved content authority.
-3. **Packaging and release:** publish a versioned distribution with migration and compatibility guarantees.
-4. **Identity and access (deferred):** authenticate operators and bind Human Authority actions to verifiable identities before any hosted or multi-user use.
-5. **Web control interface (paused):** expose the same backend gates through a local UI only when the operator workflow is mature enough to justify it.
+1. **Customer-reality integrations:** import approved evidence without granting retrieved content authority.
+2. **Public release authorization:** choose a license and authorize the exact package, registry, version, actor, and publication window before enabling npm publication.
+3. **Identity and access (deferred):** authenticate operators and bind Human Authority actions to verifiable identities before any hosted or multi-user use.
+4. **Web control interface (paused):** expose the same backend gates through a local UI only when the operator workflow is mature enough to justify it.
 
 The guiding rule is simple: automate only what has been understood manually, and measure success through better external decisions—not more internal artifacts.
 

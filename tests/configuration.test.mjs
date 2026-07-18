@@ -184,6 +184,34 @@ test("GitHub Actions runs the locked Genesis validation gate", async () => {
   }
 });
 
+test("release-candidate packaging is allowlisted, versioned, and non-publishing", async () => {
+  const packageJson = JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf8"));
+  assert.equal(packageJson.name, "genesis-governance");
+  assert.equal(packageJson.version, "2.0.0");
+  assert.equal(packageJson.private, true);
+  assert.equal(packageJson.license, "UNLICENSED");
+  assert.equal(packageJson.repository.url, "git+https://github.com/zee-cpu/Genesis.git");
+  assert.equal(packageJson.scripts["release:verify"], "node scripts/verify-package.mjs");
+  for (const required of ["bin/", "src/cli/", "config/", "schemas/", "templates/", "genesis.yaml"]) {
+    assert.equal(packageJson.files.includes(required), true, required);
+  }
+  for (const forbidden of ["site/", "src/experiments/", "records/", "tests/"]) {
+    assert.equal(packageJson.files.includes(forbidden), false, forbidden);
+  }
+
+  const workflow = await readFile(path.join(ROOT, ".github", "workflows", "package-genesis.yml"), "utf8");
+  assert.match(workflow, /^name: Package Genesis CLI$/m);
+  assert.match(workflow, /node scripts\/verify-package\.mjs --output artifacts/);
+  assert.match(workflow, /actions\/upload-artifact@v4/);
+  assert.doesNotMatch(workflow, /npm publish/);
+
+  const releaseGuide = await readFile(path.join(ROOT, "RELEASING.md"), "utf8");
+  assert.match(releaseGuide, /^Policy-Version: 2\.0\.0$/m);
+  assert.match(releaseGuide, /Human Authority approval record/);
+  assert.match(releaseGuide, /Semantic Versioning/);
+  assert.match(releaseGuide, /never migrate, delete, or rewrite/i);
+});
+
 test("README documents the offline CLI, files, recovery, and limits", async () => {
   const readme = await readFile(path.join(ROOT, "README.md"), "utf8");
   for (const command of [
@@ -224,6 +252,8 @@ test("README documents the offline CLI, files, recovery, and limits", async () =
   assert.match(readme, /npm start/);
   assert.match(readme, /node bin\/genesis\.mjs/);
   assert.match(readme, /npm link/);
+  assert.match(readme, /genesis --version/);
+  assert.match(readme, /RELEASING\.md/);
   assert.match(readme, /manually mark an approved experiment `active`/i);
   assert.match(readme, /does not execute the experiment/i);
   assert.match(readme, /does not automatically research, contact customers, run experiment steps, build products, deploy software, bill customers, or operate a business/i);

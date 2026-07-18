@@ -8,6 +8,10 @@ import { GenesisError, formatError } from "../core/errors.mjs";
 import { createPrompter } from "./prompter.mjs";
 import { renderApprovalReview, renderCliError, renderEvidenceSearch, renderGuidedApprovalProposal, renderNextGuidance, renderOpportunityList, renderOutcomeDecisionProposal, renderProposal, renderRebuildResult, renderStatus } from "./render.mjs";
 
+const PACKAGE_VERSION = JSON.parse(
+  fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+).version;
+
 const HELP = [
   "Usage:",
   "  genesis start-business",
@@ -32,6 +36,7 @@ const HELP = [
   "  genesis close-experiment <business-id>",
   "  genesis revoke-approval <business-id>",
   "  genesis rebuild-index",
+  "  genesis --version",
   "",
   "Options:",
   "  --json              Machine-readable output for list, search, status, next, review-experiment, or rebuild-index",
@@ -58,6 +63,8 @@ function parseCliOptions(values) {
     if (value === "--json") {
       json = true;
     } else if (value === "--help") {
+      positional.push(value);
+    } else if (value === "--version") {
       positional.push(value);
     } else if (value === "--input") {
       inputPath = values[index + 1];
@@ -616,6 +623,10 @@ export async function runCli(argv, dependencies = {}) {
     const [command, businessId] = args;
     if (!command || command === "--help" || command === "-h" || command === "help") {
       usage(output);
+      return 0;
+    }
+    if (["--version", "-v", "version"].includes(command)) {
+      writeLine(output, PACKAGE_VERSION);
       return 0;
     }
     const jsonCommands = new Set(["list", "search", "status", "next", "review-experiment", "rebuild-index"]);

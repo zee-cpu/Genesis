@@ -1,0 +1,33 @@
+name: Package Genesis CLI
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  package-genesis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - name: Require tag to match package version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - run: node scripts/verify-package.mjs --output artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: genesis-governance-${{ github.ref_name }}
+          path: artifacts/*.tgz
+          if-no-files-found: error
+          retention-days: 14
