@@ -18,6 +18,8 @@ const HELP = [
   "  genesis approve-experiment <business-id>",
   "  genesis deny-experiment <business-id>",
   "  genesis start-experiment <business-id>",
+  "  genesis record-execution <business-id>",
+  "  genesis record-measurement <business-id>",
   "  genesis revoke-approval <business-id>",
   "  genesis rebuild-index",
 ].join("\n");
@@ -85,6 +87,13 @@ async function askGuidedList(prompter, question, { fallback = [], allowed } = {}
     if (values.length > 0 && (!allowed || values.every((value) => allowed.includes(value)))) {
       return values;
     }
+  }
+}
+
+async function askGuidedChoice(prompter, question, allowed, fallback) {
+  while (true) {
+    const answer = (await prompter.ask(question)).trim() || fallback;
+    if (allowed.includes(answer)) return answer;
   }
 }
 
@@ -264,6 +273,64 @@ async function gatherGuidedDiscoverCorrection(prompter, guidance, output) {
   };
 }
 
+async function gatherExecutionInput(prompter, guidance) {
+  const defaults = guidance.defaults ?? {};
+  return {
+    actor: defaults.actor,
+    execution_log: await askGuidedList(prompter, "What was actually executed? (comma-separated factual entries): "),
+    deviations: parseCommaList(await prompter.ask("Deviations from the preregistered plan (comma-separated; blank for none): ")),
+    completion_reason: await askGuidedChoice(
+      prompter,
+      "Completion reason (completed, stop_condition, or failure_condition): ",
+      ["completed", "stop_condition", "failure_condition"],
+      undefined,
+    ),
+    started_at: await askRequired(prompter, `Execution started at [${defaults.started_at}]: `, defaults.started_at),
+    completed_at: await askRequired(prompter, `Execution completed at [${defaults.completed_at}]: `, defaults.completed_at),
+    actual_cost: {
+      cash_usd: await askGuidedNumber(prompter, "Actual cash spent: ", { fallback: Number.NaN }),
+      labor_hours: await askGuidedNumber(prompter, "Actual labor hours: ", { fallback: Number.NaN }),
+    },
+    data_classes: await askGuidedList(
+      prompter,
+      `Data classes actually accessed (approved: ${(defaults.data_classes ?? []).join(",")}): `,
+      {
+        fallback: [],
+        allowed: ["public", "internal", "confidential"],
+      },
+    ),
+    risk_level: await askGuidedChoice(
+      prompter,
+      `Actual risk level (approved maximum: ${defaults.risk_level}): `,
+      ["low", "medium", "high", "critical"],
+      undefined,
+    ),
+  };
+}
+
+async function gatherMeasurementInput(prompter, guidance) {
+  const defaults = guidance.defaults ?? {};
+  return {
+    reviewer: defaults.reviewer ?? "analyst",
+    actual_result: await askRequired(prompter, "Observed metric result: "),
+    comparison: await askRequired(prompter, "Comparison with the preregistered baseline and minimum effect: "),
+    measurement_evidence: await askGuidedList(
+      prompter,
+      `Measurement source references (preregistered: ${(defaults.measurement_evidence ?? []).join(",")}): `,
+      { fallback: [] },
+    ),
+    data_quality: {
+      assessment: await askGuidedChoice(
+        prompter,
+        "Data quality (adequate, limited, or unreliable): ",
+        ["adequate", "limited", "unreliable"],
+        undefined,
+      ),
+      limitations: parseCommaList(await prompter.ask("Data-quality limitations (comma-separated; blank for none): ")),
+    },
+  };
+}
+
 function writeMutationResult(result, output, errorOutput) {
   if (!result.changed) {
     writeLine(output, "Cancelled.");
@@ -412,6 +479,24 @@ export async function runCli(argv, dependencies = {}) {
         return 0;
       }
 
+      if (guidance.action === "record_execution") {
+        const result = await service.recordExecution(
+          businessId,
+          await gatherExecutionInput(prompter, guidance),
+        );
+        writeMutationResult(result, output, errorOutput);
+        return 0;
+      }
+
+      if (guidance.action === "record_measurement") {
+        const result = await service.recordMeasurement(
+          businessId,
+          await gatherMeasurementInput(prompter, guidance),
+        );
+        writeMutationResult(result, output, errorOutput);
+        return 0;
+      }
+
       return 0;
     }
 
@@ -485,6 +570,20 @@ export async function runCli(argv, dependencies = {}) {
       }
       if (result.warning) writeLine(errorOutput, renderCliError(result.warning));
       writeLine(output, renderStatus(result.status));
+      return 0;
+    }
+
+    if (command === "record-execution" || command === "record-measurement") {
+      if (!businessId) {
+        usage(output);
+        return 2;
+      }
+      const guidance = await service.next(businessId);
+      writeLine(output, renderNextGuidance(guidance));
+      const result = command === "record-execution"
+        ? await service.recordExecution(businessId, await gatherExecutionInput(prompter, guidance))
+        : await service.recordMeasurement(businessId, await gatherMeasurementInput(prompter, guidance));
+      writeMutationResult(result, output, errorOutput);
       return 0;
     }
 

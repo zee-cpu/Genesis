@@ -289,7 +289,7 @@ function projectApproval(db, descriptor, record) {
     ? "approval_revoked"
     : record.decision === "denied"
       ? "approval_denied"
-      : ["active", "closed", "superseded"].includes(current.state)
+      : ["active", "measurement", "reflection", "closed", "superseded"].includes(current.state)
         ? current.state
         : "approved";
   upsertOpportunity(db, {

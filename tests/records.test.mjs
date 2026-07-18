@@ -225,6 +225,18 @@ test("draft experiment requires preregistration but not closure fields", async (
   assert.equal(compileSchema("experiment_record")(draft), true);
 });
 
+test("measurement and reflection states require separate execution and result evidence", () => {
+  const measurement = loadTemplate("experiment_record");
+  measurement.status = "measurement";
+  delete measurement.execution_log;
+  assert.equal(compileSchema("experiment_record")(measurement), false);
+
+  const reflection = loadTemplate("experiment_record");
+  reflection.status = "reflection";
+  delete reflection.actual_result;
+  assert.equal(compileSchema("experiment_record")(reflection), false);
+});
+
 test("closed validation experiment requires closure and validation outcome", async () => {
   const closed = loadTemplate("experiment_record");
   delete closed.validation_outcome;

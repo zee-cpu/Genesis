@@ -40,9 +40,25 @@ limits:
 decision_date: 2026-07-24T10:00:00Z
 allowed_outcomes: [scale, pivot, learning_lab, archive, kill]
 approval_references: [example-approval-001]
+execution_log: [work-log://example/experiment-001]
+deviations: []
+completion_reason: completed
+actual_exposure:
+  started_at: 2026-07-17T10:00:00Z
+  completed_at: 2026-07-24T09:00:00Z
+  duration_days: 6.96
+  data_classes: [internal]
+  risk_level: low
 actual_cost:
   cash_usd: 0
   labor_hours: 20
+actual_result: Three of five qualified participants completed the task unaided.
+comparison: The observed 0.60 completion ratio met the preregistered threshold.
+data_quality:
+  assessment: limited
+  limitations: [small_sample_size]
+measurement_reviewer: analyst
+measurement_evidence: [evidence://example/experiment-results]
 results: Three of five qualified participants completed the task unaided.
 reflection: The threshold passed narrowly; counterevidence remains material.
 outcome: pivot

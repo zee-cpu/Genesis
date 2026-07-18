@@ -8,7 +8,7 @@
     "schema_version": { "$ref": "#/$defs/semver" }, "policy_version": { "const": "2.0.0" },
     "created_at": { "$ref": "#/$defs/dateTime" }, "updated_at": { "$ref": "#/$defs/dateTime" },
     "owner": { "$ref": "#/$defs/nonempty" }, "affected_business": { "$ref": "#/$defs/nonempty" },
-    "status": { "enum": ["draft", "active", "closed", "superseded"] },
+    "status": { "enum": ["draft", "active", "measurement", "reflection", "closed", "superseded"] },
     "subtype": { "enum": ["validation"] }, "validation_outcome": { "enum": ["pending", "passed", "failed"] },
     "evidence_references": { "$ref": "#/$defs/nonemptyRefs" }, "related_records": { "$ref": "#/$defs/recordRefs" },
     "privacy_classification": { "$ref": "#/$defs/privacy" }, "immutable_history_refs": { "$ref": "#/$defs/nonemptyRefs" },
@@ -29,10 +29,36 @@
     "decision_date": { "$ref": "#/$defs/dateTime" },
     "allowed_outcomes": { "const": ["scale", "pivot", "learning_lab", "archive", "kill"] },
     "approval_references": { "$ref": "#/$defs/recordRefs" },
+    "execution_log": { "$ref": "#/$defs/nonemptyRefs" },
+    "deviations": { "$ref": "#/$defs/refs" },
+    "completion_reason": { "enum": ["completed", "stop_condition", "failure_condition"] },
+    "actual_exposure": {
+      "type": "object", "additionalProperties": false,
+      "required": ["started_at", "completed_at", "duration_days", "data_classes", "risk_level"],
+      "properties": {
+        "started_at": { "$ref": "#/$defs/dateTime" },
+        "completed_at": { "$ref": "#/$defs/dateTime" },
+        "duration_days": { "type": "number", "minimum": 0 },
+        "data_classes": { "$ref": "#/$defs/experimentDataClasses" },
+        "risk_level": { "enum": ["low", "medium", "high", "critical"] }
+      }
+    },
     "actual_cost": {
       "type": "object", "additionalProperties": false, "required": ["cash_usd", "labor_hours"],
       "properties": { "cash_usd": { "type": "number", "minimum": 0 }, "labor_hours": { "type": "number", "minimum": 0 } }
     },
+    "actual_result": { "$ref": "#/$defs/nonempty" },
+    "comparison": { "$ref": "#/$defs/nonempty" },
+    "data_quality": {
+      "type": "object", "additionalProperties": false,
+      "required": ["assessment", "limitations"],
+      "properties": {
+        "assessment": { "enum": ["adequate", "limited", "unreliable"] },
+        "limitations": { "$ref": "#/$defs/refs" }
+      }
+    },
+    "measurement_reviewer": { "$ref": "#/$defs/nonempty" },
+    "measurement_evidence": { "$ref": "#/$defs/nonemptyRefs" },
     "results": { "$ref": "#/$defs/nonempty" }, "reflection": { "$ref": "#/$defs/nonempty" },
     "outcome": { "enum": ["scale", "pivot", "learning_lab", "archive", "kill"] }, "experience_reference": { "$ref": "#/$defs/recordRef" },
     "confidence_update": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
@@ -40,8 +66,35 @@
   },
   "allOf": [
     {
-      "if": { "properties": { "status": { "enum": ["active", "closed"] } }, "required": ["status"] },
+      "if": { "properties": { "status": { "enum": ["active", "measurement", "reflection", "closed"] } }, "required": ["status"] },
       "then": { "properties": { "approval_references": { "$ref": "#/$defs/nonemptyRecordRefs" } } }
+    },
+    {
+      "if": { "properties": { "status": { "enum": ["measurement", "reflection", "closed"] } }, "required": ["status"] },
+      "then": {
+        "required": ["execution_log", "deviations", "completion_reason", "actual_exposure", "actual_cost"],
+        "properties": {
+          "execution_log": true,
+          "deviations": true,
+          "completion_reason": true,
+          "actual_exposure": true,
+          "actual_cost": true
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "enum": ["reflection", "closed"] } }, "required": ["status"] },
+      "then": {
+        "required": ["actual_result", "comparison", "data_quality", "measurement_reviewer", "measurement_evidence", "results"],
+        "properties": {
+          "actual_result": true,
+          "comparison": true,
+          "data_quality": true,
+          "measurement_reviewer": true,
+          "measurement_evidence": true,
+          "results": true
+        }
+      }
     },
     {
       "if": { "properties": { "status": { "const": "closed" } }, "required": ["status"] },

@@ -185,8 +185,49 @@ await runSection("guidedNextUsesProjectionAndLifecycleState", async () => {
     await service.startExperiment("bakery", { actor: "research" });
     const active = await service.next("bakery");
     assert.equal(active.projected_state, "active");
-    assert.equal(active.action, "no_transition");
-    assert.match(active.message, /does not yet automate execution/i);
+    assert.equal(active.action, "record_execution");
+    assert.equal(active.defaults.actor, "research");
+
+    const execution = await service.recordExecution("bakery", {
+      actor: "research",
+      execution_log: ["Completed the preregistered bounded test"],
+      deviations: [],
+      completion_reason: "completed",
+      started_at: "2026-07-17T12:00:00Z",
+      completed_at: "2026-07-17T12:00:00Z",
+      actual_cost: { cash_usd: 0, labor_hours: 1 },
+      data_classes: ["internal"],
+      risk_level: "low",
+    });
+    assert.equal(execution.state, "measurement");
+    assert.equal(execution.record.status, "measurement");
+    assert.equal((await service.next("bakery")).action, "record_measurement");
+
+    await assert.rejects(
+      () => service.recordMeasurement("bakery", {
+        reviewer: "analyst",
+        actual_result: "Median reconciliation time was 55 minutes",
+        comparison: "The result improved on the 120-minute baseline by 65 minutes",
+        measurement_evidence: ["observed_session_log"],
+        data_quality: { assessment: "limited", limitations: [] },
+      }),
+      (error) => error.code === "DATA_QUALITY_LIMITATION_REQUIRED",
+    );
+
+    const measurement = await service.recordMeasurement("bakery", {
+      reviewer: "analyst",
+      actual_result: "Median reconciliation time was 55 minutes",
+      comparison: "The result improved on the 120-minute baseline by 65 minutes",
+      measurement_evidence: ["observed_session_log"],
+      data_quality: { assessment: "limited", limitations: ["small_sample"] },
+    });
+    assert.equal(measurement.state, "reflection");
+    assert.equal(measurement.record.status, "reflection");
+    assert.equal((await service.next("bakery")).action, "no_transition");
+
+    const rebuild = await service.rebuildIndex();
+    assert.equal(rebuild.projection_consistent, true);
+    assert.equal((await service.status("bakery")).state, "reflection");
 
     fs.rmSync(workspacePaths(projectRoot).db, { force: true });
     await assert.rejects(
@@ -395,6 +436,29 @@ await runSection("approvalStartAndRevocation", async () => {
     assert.equal(started.state, "active");
     assert.equal(started.record.status, "active");
     assert.deepEqual(started.record.approval_references, ["bakery-experiment-approval"]);
+
+    const executionInput = {
+      actor: "research",
+      execution_log: ["Completed the bounded test"],
+      deviations: [],
+      completion_reason: "completed",
+      started_at: "2026-07-17T12:00:00Z",
+      completed_at: "2026-07-17T12:00:00Z",
+      actual_cost: { cash_usd: 0, labor_hours: 1 },
+      data_classes: ["internal"],
+      risk_level: "low",
+    };
+    await assert.rejects(
+      () => service.recordExecution("bakery", { ...executionInput, actor: "builder" }),
+      (error) => error.code === "APPROVAL_ACTOR_MISMATCH",
+    );
+    await assert.rejects(
+      () => service.recordExecution("bakery", {
+        ...executionInput,
+        actual_cost: { cash_usd: 0, labor_hours: 9 },
+      }),
+      (error) => error.code === "ACTUAL_EXPOSURE_EXCEEDED" && error.path === "/actual_exposure/labor_hours",
+    );
 
     const revoked = await service.revokeApproval("bakery", {
       approver_principal_id: "genesis-owner",

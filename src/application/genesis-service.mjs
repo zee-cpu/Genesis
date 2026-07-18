@@ -13,6 +13,7 @@ import { withWorkspaceLock, workspacePaths } from "../storage/workspace.mjs";
 
 const DEFAULT_CONFIRM = async () => true;
 const DEFAULT_CLOCK = () => new Date();
+const RISK_LEVELS = ["low", "medium", "high", "critical"];
 
 function unique(values) {
   return [...new Set(values.filter((value) => value !== undefined && value !== null))];
@@ -174,7 +175,7 @@ function currentStatus({ projectRoot, businessId, now }) {
     } else if (approval.decision === "denied") {
       state = "approval_denied";
       nextCommand = "review-experiment";
-    } else if (!approvalValidity.valid) {
+    } else if (!approvalValidity.valid && ["draft", "active"].includes(latestExperiment?.record.status)) {
       state = "approval_invalid";
       nextCommand = "review-experiment";
     } else if (latestExperiment?.record.status === "draft") {
@@ -184,6 +185,10 @@ function currentStatus({ projectRoot, businessId, now }) {
   } else if (status.state === "approval_pending") {
     nextCommand = "review-experiment";
   }
+
+  if (latestExperiment?.record.status === "active") nextCommand = "record-execution";
+  if (state === "measurement") nextCommand = "record-measurement";
+  if (state === "reflection") nextCommand = "status";
 
   return {
     business_id: normalized,
@@ -316,11 +321,39 @@ function guidedNextStep({ projectRoot, businessId, clock }) {
       defaults: { actor: approval.actor },
     };
   }
-  if (state === "active") {
+  if (projected.state === "active") {
+    return {
+      ...base,
+      action: "record_execution",
+      message: status.approval_validity?.valid
+        ? "The experiment is active. Record the completed or stopped execution without rerunning it."
+        : "The experiment is active, but its approval is currently invalid. Only execution completed inside the approved window can be recorded.",
+      blocker: status.approval_validity?.valid ? null : status.approval_validity?.blockers?.[0],
+      defaults: {
+        actor: approval?.actor ?? experiment?.owner,
+        started_at: experiment?.updated_at,
+        completed_at: now,
+        data_classes: experiment?.limits?.data_classes ?? [],
+        risk_level: experiment?.limits?.risk_level,
+      },
+    };
+  }
+  if (projected.state === "measurement") {
+    return {
+      ...base,
+      action: "record_measurement",
+      message: "Execution is preserved. Record the observed metric result and its data quality separately.",
+      defaults: {
+        reviewer: "analyst",
+        measurement_evidence: experiment?.metric?.data_source ? [experiment.metric.data_source] : [],
+      },
+    };
+  }
+  if (projected.state === "reflection") {
     return {
       ...base,
       action: "no_transition",
-      message: "The experiment is active. Genesis 2.0 does not yet automate execution or measurement.",
+      message: "Measurement is complete. Reflection and outcome selection are the next unimplemented lifecycle increment.",
     };
   }
   return {
@@ -704,6 +737,195 @@ function startExperimentProposal(projectRoot, businessId, input, clock, registry
   };
 }
 
+function requireWithinActualEnvelope(actual, limits) {
+  for (const field of ["cash_usd", "labor_hours", "duration_days"]) {
+    if (!Number.isFinite(actual[field]) || actual[field] < 0 || actual[field] > limits[field]) {
+      throw new GenesisError("ACTUAL_EXPOSURE_EXCEEDED", "Actual experiment exposure is outside the approved limit", {
+        path: `/actual_exposure/${field}`,
+        correction: `Enter the factual ${field} at or below the approved limit ${limits[field]}; escalate any overrun`,
+        escalation: "human_authority",
+      });
+    }
+  }
+  if (
+    !Array.isArray(actual.data_classes)
+    || actual.data_classes.length === 0
+    || actual.data_classes.some((value) => !limits.data_classes.includes(value))
+  ) {
+    throw new GenesisError("ACTUAL_DATA_CLASS_EXCEEDED", "Actual data use is outside the approved classes", {
+      path: "/actual_exposure/data_classes",
+      correction: `Use only actually accessed approved classes: ${limits.data_classes.join(", ")}`,
+      escalation: "human_authority",
+    });
+  }
+  const approvedRisk = RISK_LEVELS.indexOf(limits.risk_level);
+  const actualRisk = RISK_LEVELS.indexOf(actual.risk_level);
+  if (actualRisk < 0 || actualRisk > approvedRisk) {
+    throw new GenesisError("ACTUAL_RISK_EXCEEDED", "Actual risk is outside the approved classification", {
+      path: "/actual_exposure/risk_level",
+      correction: `Use the factual risk at or below ${limits.risk_level}; escalate a higher classification`,
+      escalation: "human_authority",
+    });
+  }
+}
+
+function recordExecutionProposal(projectRoot, businessId, input, clock, registry) {
+  const normalized = normalizeBusinessId(businessId);
+  const { entries, decisionEntries, experimentEntries } = businessEntries(projectRoot, normalized);
+  ensureBusinessExists(decisionEntries, normalized);
+  ensureExperimentExists(experimentEntries);
+  const latestExperiment = latestExperimentEntry(entries);
+  const latestApproval = latestApprovalEntry(entries);
+  if (latestExperiment.record.status !== "active") {
+    throw new GenesisError("COMMAND_UNAVAILABLE", "Only an active experiment can record execution", {
+      path: "/experiment/status",
+      correction: "Use status or genesis next for the current lifecycle state",
+      escalation: "operator",
+    });
+  }
+
+  const experiment = latestExperiment.record;
+  const now = clock().toISOString();
+  const startedAt = input.started_at || experiment.updated_at;
+  const completedAt = input.completed_at || now;
+  const startedMs = Date.parse(startedAt);
+  const completedMs = Date.parse(completedAt);
+  const nowMs = Date.parse(now);
+  if (
+    !Number.isFinite(startedMs)
+    || !Number.isFinite(completedMs)
+    || startedMs < Date.parse(experiment.updated_at)
+    || startedMs > completedMs
+    || completedMs > nowMs
+  ) {
+    throw new GenesisError("EXECUTION_TIME_INVALID", "Execution timestamps are invalid", {
+      path: "/actual_exposure/completed_at",
+      correction: "Use start <= completion <= current time, with start no earlier than the active transition",
+      escalation: "operator",
+    });
+  }
+
+  requireExperimentApproval({
+    approval: latestApproval?.record,
+    experiment,
+    actor: input.actor,
+    now: startedAt,
+  });
+  requireExperimentApproval({
+    approval: latestApproval?.record,
+    experiment,
+    actor: input.actor,
+    now: completedAt,
+  });
+
+  const durationDays = (completedMs - startedMs) / 86_400_000;
+  const actual = {
+    cash_usd: input.actual_cost?.cash_usd,
+    labor_hours: input.actual_cost?.labor_hours,
+    duration_days: durationDays,
+    data_classes: input.data_classes,
+    risk_level: input.risk_level,
+  };
+  requireWithinActualEnvelope(actual, experiment.limits);
+
+  const record = versionExperimentRecord(
+    experiment,
+    {
+      status: "measurement",
+      execution_log: input.execution_log,
+      deviations: input.deviations ?? [],
+      completion_reason: input.completion_reason,
+      actual_exposure: {
+        started_at: startedAt,
+        completed_at: completedAt,
+        duration_days: durationDays,
+        data_classes: input.data_classes,
+        risk_level: input.risk_level,
+      },
+      actual_cost: {
+        cash_usd: input.actual_cost?.cash_usd,
+        labor_hours: input.actual_cost?.labor_hours,
+      },
+    },
+    latestExperiment.descriptor.relativePath,
+    clock,
+    { registry },
+  );
+  return {
+    command: "record-execution",
+    business_id: normalized,
+    state: "measurement",
+    record,
+    records: [{
+      kind: "experiment",
+      record,
+      version: latestExperiment.descriptor.version + 1,
+    }],
+  };
+}
+
+function recordMeasurementProposal(projectRoot, businessId, input, clock, registry) {
+  const normalized = normalizeBusinessId(businessId);
+  const { entries, decisionEntries, experimentEntries } = businessEntries(projectRoot, normalized);
+  ensureBusinessExists(decisionEntries, normalized);
+  ensureExperimentExists(experimentEntries);
+  const latestExperiment = latestExperimentEntry(entries);
+  if (latestExperiment.record.status !== "measurement") {
+    throw new GenesisError("COMMAND_UNAVAILABLE", "Only an experiment awaiting measurement can record a result", {
+      path: "/experiment/status",
+      correction: "Record execution first, or use status for the current lifecycle state",
+      escalation: "analyst",
+    });
+  }
+  if (input.reviewer !== "analyst") {
+    throw new GenesisError("MEASUREMENT_REVIEWER_INVALID", "Experiment measurement requires the analyst role", {
+      path: "/measurement_reviewer",
+      correction: "Use analyst as the accountable measurement reviewer",
+      escalation: "analyst",
+    });
+  }
+  if (
+    ["limited", "unreliable"].includes(input.data_quality?.assessment)
+    && (!Array.isArray(input.data_quality?.limitations) || input.data_quality.limitations.length === 0)
+  ) {
+    throw new GenesisError("DATA_QUALITY_LIMITATION_REQUIRED", "Limited or unreliable measurement data requires an explicit limitation", {
+      path: "/data_quality/limitations",
+      correction: "Record at least one concrete data-quality limitation",
+      escalation: "analyst",
+    });
+  }
+
+  const record = versionExperimentRecord(
+    latestExperiment.record,
+    {
+      status: "reflection",
+      actual_result: input.actual_result,
+      comparison: input.comparison,
+      data_quality: {
+        assessment: input.data_quality?.assessment,
+        limitations: input.data_quality?.limitations ?? [],
+      },
+      measurement_reviewer: input.reviewer,
+      measurement_evidence: input.measurement_evidence,
+      results: input.actual_result,
+    },
+    latestExperiment.descriptor.relativePath,
+    clock,
+    { registry },
+  );
+  return {
+    command: "record-measurement",
+    business_id: normalized,
+    state: "reflection",
+    record,
+    records: [{
+      kind: "experiment",
+      record,
+      version: latestExperiment.descriptor.version + 1,
+    }],
+  };
+}
+
 function revokeApprovalProposal(projectRoot, businessId, input, clock, registry) {
   const normalized = normalizeBusinessId(businessId);
   const { entries, decisionEntries, experimentEntries } = businessEntries(projectRoot, normalized);
@@ -929,6 +1151,20 @@ export function createGenesisService({
       return runWithProposal(
         () => startExperimentProposal(projectRoot, businessId, input, clock, activeRegistry),
         "start-experiment",
+      );
+    },
+
+    async recordExecution(businessId, input) {
+      return runWithProposal(
+        () => recordExecutionProposal(projectRoot, businessId, input, clock, activeRegistry),
+        "record-execution",
+      );
+    },
+
+    async recordMeasurement(businessId, input) {
+      return runWithProposal(
+        () => recordMeasurementProposal(projectRoot, businessId, input, clock, activeRegistry),
+        "record-measurement",
       );
     },
 

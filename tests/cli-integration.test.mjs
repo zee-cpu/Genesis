@@ -357,7 +357,7 @@ test("CLI dispatches Human review, approval, denial, start, and revocation comma
   }
 });
 
-test("guided next plans, approves, starts, and explains an active experiment", { concurrency: false }, async () => {
+test("guided next plans, approves, starts, records execution, and records measurement", { concurrency: false }, async () => {
   const projectRoot = makeProjectRoot();
   const output = createBuffer();
   try {
@@ -444,6 +444,44 @@ test("guided next plans, approves, starts, and explains an active experiment", {
       clock: CLOCK,
       output,
       errorOutput: output,
+      prompter: createScriptedPrompter([
+        "Completed the preregistered bounded test",
+        "",
+        "completed",
+        "",
+        "",
+        "0",
+        "1",
+        "internal",
+        "low",
+        "y",
+      ], output),
+    }), 0);
+    assert.equal((await setup.status("bakery")).state, "measurement");
+
+    assert.equal(await runCli(["next", "bakery"], {
+      projectRoot,
+      repoRoot: ROOT,
+      clock: CLOCK,
+      output,
+      errorOutput: output,
+      prompter: createScriptedPrompter([
+        "Median reconciliation time was 55 minutes",
+        "The result improved on the baseline by 65 minutes",
+        "observed_session_log",
+        "limited",
+        "small sample",
+        "y",
+      ], output),
+    }), 0);
+    assert.equal((await setup.status("bakery")).state, "reflection");
+
+    assert.equal(await runCli(["next", "bakery"], {
+      projectRoot,
+      repoRoot: ROOT,
+      clock: CLOCK,
+      output,
+      errorOutput: output,
       prompter: createScriptedPrompter([], output),
     }), 0);
 
@@ -452,7 +490,11 @@ test("guided next plans, approves, starts, and explains an active experiment", {
     assert.match(text, /Human Authority decision envelope/);
     assert.match(text, /Human Authority genesis-owner — save this decision\? \[y\/N\]/);
     assert.match(text, /Current state: active/);
-    assert.match(text, /does not yet automate execution or measurement/);
+    assert.match(text, /Guided action: record_execution/);
+    assert.match(text, /Current state: measurement/);
+    assert.match(text, /Guided action: record_measurement/);
+    assert.match(text, /Current state: reflection/);
+    assert.match(text, /Reflection and outcome selection/);
   } finally {
     cleanupProjectRoot(projectRoot);
   }
