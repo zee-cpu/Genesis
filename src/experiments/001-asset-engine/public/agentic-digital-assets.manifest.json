@@ -1,7 +1,7 @@
 {
   "distribution_schema_version": "1.0.0",
   "package_id": "agentic-digital-assets",
-  "generated_at": "2026-07-18T17:50:55.706Z",
+  "generated_at": "2026-07-18T18:15:15.070Z",
   "asset_count": 5,
   "network_boundary": {
     "status": "offline_verified",
@@ -14,7 +14,7 @@
       "node:url"
     ],
     "generator_assets_verified": 5,
-    "generator_elapsed_ms": 85.4
+    "generator_elapsed_ms": 91.4
   },
   "assets": [
     {
