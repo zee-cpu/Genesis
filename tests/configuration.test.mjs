@@ -188,6 +188,7 @@ test("README documents the offline CLI, files, recovery, and limits", async () =
   const readme = await readFile(path.join(ROOT, "README.md"), "utf8");
   for (const command of [
     "genesis start-business",
+    "genesis start-follow-up <business-id>",
     "genesis add-evidence <business-id>",
     "genesis status <business-id>",
     "genesis next <business-id>",

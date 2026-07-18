@@ -59,6 +59,7 @@ It can:
 - create a reviewed experience with reflection, a reusable lesson, a validity window, and an explicit confidence update;
 - require Human Authority approval for one exact Major Bet outcome decision, backed by evidence, constitution, and CEO reviews;
 - close the experiment, business decision, and reviewed experience together after revalidating the exact outcome approval;
+- create a fresh Discover workflow after an eligible closed `pivot` or `scale`, linked to the reviewed experience but carrying forward no authority or limits;
 - revoke an approval and supersede an active experiment without deleting history;
 - maintain a fast local SQLite projection; and
 - rebuild that projection entirely from canonical YAML records.
@@ -369,6 +370,7 @@ This validates every canonical YAML record and replaces the SQLite projection wi
 | Command | Purpose | Writes records? | Expected end state |
 |---|---|---:|---|
 | `genesis start-business` | Create an opportunity, its first decision, and initial evidence | Yes, after confirmation | `discover` |
+| `genesis start-follow-up <business-id>` | Create a separately governed follow-up after a closed `pivot` or `scale` | Yes, after confirmation | New business in `discover` |
 | `genesis add-evidence <business-id>` | Add evidence and version the associated decision | Yes, after confirmation | `discover` |
 | `genesis status <business-id>` | Show state, gates, metrics, limits, blocked commands, and projection health | No | Unchanged |
 | `genesis next <business-id>` | Explain the projected state and guide the next valid transition one question at a time | Only when the guided proposal is confirmed | Depends on current state |
@@ -696,6 +698,7 @@ Current technical boundaries include:
 - the `active` transition records authorization state but does not run experiment tasks;
 - execution and measurement are operator-entered evidence; Genesis does not infer or fabricate results;
 - an approved `scale`, `pivot`, or other outcome is a classification decision only; it grants no permission to execute follow-on work;
+- generic follow-up is limited to closed `pivot` and `scale` outcomes; `learning_lab` requires a dedicated governed record that is not yet implemented;
 - no automatic metric ingestion from customer or operating systems;
 - no authentication, encryption layer, remote backup, or sync;
 - no packaged npm release—the supported installation path is this repository plus `npm link`; and
@@ -709,7 +712,7 @@ The current engine is ready for local, controlled use across one complete govern
 
 1. **Web control interface:** expose opportunity status, evidence, experiment review, approval/denial, manual start, and revocation through a clean local UI while preserving the same backend gates.
 2. **Identity and access:** authenticate operators and bind Human Authority actions to verifiable identities before any hosted or multi-user use.
-3. **Portfolio continuation:** turn an approved `pivot`, `scale`, or `learning_lab` classification into a separately proposed and approved next opportunity or experiment without inheriting authority from the closed experiment.
+3. **Learning-lab continuation:** add the dedicated budget, owner, learning metric, monthly review, and expiry record required to continue a `learning_lab` outcome; generic follow-up remains fail-closed.
 4. **Operator experience:** add opportunity listing, non-interactive structured input/output, broader correction workflows, and search on top of the guided `next` command.
 5. **Customer-reality integrations:** import approved evidence without granting retrieved content authority.
 6. **Packaging and release:** publish a versioned distribution with migration and compatibility guarantees.

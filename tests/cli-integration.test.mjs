@@ -532,8 +532,28 @@ test("guided next progresses from discovery through governed experiment closure"
       clock: CLOCK,
       output,
       errorOutput: output,
-      prompter: createScriptedPrompter([], output),
+      prompter: createScriptedPrompter([
+        "",
+        "",
+        "The first sample was too small to justify scale",
+        "A larger bounded sample will reproduce the observed reduction",
+        "",
+        "",
+        "",
+        "1",
+        "",
+        "",
+        "",
+        "archive,run_smaller_segment_test",
+        "The larger sample preserves at least a 60-minute reduction",
+        "median_reconciliation_minutes",
+        "decide_whether_scale_readiness_is_supported",
+        "",
+        "",
+        "y",
+      ], output),
     }), 0);
+    assert.equal((await setup.status("bakery-pivot-01")).state, "discover");
 
     const text = output.toString();
     assert.match(text, /SQLite state: discover/);
@@ -551,6 +571,8 @@ test("guided next progresses from discovery through governed experiment closure"
     assert.match(text, /Current state: outcome_approved/);
     assert.match(text, /Guided action: close_experiment/);
     assert.match(text, /Current state: closed/);
+    assert.match(text, /Guided action: start_follow_up/);
+    assert.match(text, /Business ID: bakery-pivot-01/);
   } finally {
     cleanupProjectRoot(projectRoot);
   }

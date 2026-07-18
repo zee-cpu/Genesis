@@ -415,10 +415,32 @@ function guidedNextStep({ projectRoot, businessId, clock }) {
     };
   }
   if (projected.state === "closed") {
+    if (["pivot", "scale"].includes(experiment?.decision_outcome)) {
+      return {
+        ...base,
+        action: "start_follow_up",
+        message: `The ${experiment.decision_outcome} classification permits a fresh workflow instance. No approval, budget, or execution authority will carry forward.`,
+        defaults: {
+          business_id: `${normalized}-${experiment.decision_outcome}-01`,
+          target_customer: decision?.target_customer,
+          confidence: experience?.confidence,
+          source_reference: `experience://${experience?.id}`,
+          summary: experience?.reusable_lesson,
+          provenance: `Genesis reviewed experience ${experience?.id}`,
+          privacy_classification: experience?.privacy_classification,
+          counterevidence: experience?.contradicting_evidence ?? [],
+          owner: experiment?.owner,
+          review_date: new Date(Date.parse(now) + (14 * 86_400_000)).toISOString(),
+        },
+      };
+    }
+    const correction = experiment?.decision_outcome === "learning_lab"
+      ? "A learning lab needs separate budget, learning metric, monthly review, and expiry governance."
+      : "This terminal outcome does not create follow-up authority.";
     return {
       ...base,
       action: "no_transition",
-      message: "The experiment is closed and its immutable decision and experience records are preserved.",
+      message: `The experiment is closed and its immutable records are preserved. ${correction}`,
     };
   }
   return {
@@ -488,7 +510,7 @@ function startBusinessProposal(input, clock, registry) {
     business_id: businessId,
     owner: input.owner,
     evidence_references: sourceReferences,
-    related_records: input.related_records ?? [evidenceId],
+    related_records: unique([evidenceId, ...(input.related_records ?? [])]),
     immutable_history_refs: [`records/decisions/${businessId}-decision.v0001.yaml`],
     target_customer: input.target_customer,
     problem: input.problem,
@@ -512,6 +534,72 @@ function startBusinessProposal(input, clock, registry) {
       { kind: "evidence", record: evidenceRecord, version: 1 },
       { kind: "decision", record: decisionRecord, version: 1 },
     ],
+  };
+}
+
+function startFollowUpProposal(projectRoot, parentBusinessId, input, clock, registry) {
+  const parentId = normalizeBusinessId(parentBusinessId);
+  const childId = normalizeBusinessId(input.business_id);
+  if (parentId === childId) {
+    throw new GenesisError("FOLLOW_UP_ID_REUSED", "A follow-up requires a new business ID", {
+      path: "/business_id",
+      correction: "Choose a new ID so the closed workflow remains immutable",
+      escalation: "research",
+    });
+  }
+  const parent = businessEntries(projectRoot, parentId);
+  ensureBusinessExists(parent.decisionEntries, parentId);
+  ensureExperimentExists(parent.experimentEntries);
+  const parentExperiment = latestExperimentEntry(parent.entries);
+  const parentExperience = latestExperienceEntry(parent.entries);
+  const parentDecision = latestDecisionEntry(parent.entries);
+  if (
+    parentExperiment.record.status !== "closed"
+    || parentExperience?.record.status !== "closed"
+    || parentDecision.record.status !== "closed"
+  ) {
+    throw new GenesisError("FOLLOW_UP_PARENT_NOT_CLOSED", "Follow-up work requires a fully closed parent workflow", {
+      path: "/parent_business/state",
+      correction: "Complete governed closure before creating a follow-up opportunity",
+      escalation: "research",
+    });
+  }
+  const outcome = parentExperiment.record.decision_outcome;
+  if (!["pivot", "scale"].includes(outcome)) {
+    throw new GenesisError("FOLLOW_UP_OUTCOME_INELIGIBLE", "The closed outcome does not permit this generic follow-up workflow", {
+      path: "/decision_outcome",
+      correction: outcome === "learning_lab"
+        ? "Create dedicated learning-lab governance with budget, metric, monthly review, and expiry"
+        : "Preserve the terminal archive or kill outcome without creating follow-up work",
+      escalation: outcome === "learning_lab" ? "ceo" : "analyst",
+    });
+  }
+  if (businessEntries(projectRoot, childId).decisionEntries.length > 0) {
+    throw new GenesisError("BUSINESS_ALREADY_EXISTS", "Follow-up business opportunity already exists", {
+      path: "/business_id",
+      correction: "Choose a new follow-up business ID",
+      escalation: "research",
+    });
+  }
+
+  const proposal = startBusinessProposal({
+    ...input,
+    business_id: childId,
+    evidence_references: unique([
+      input.source_reference,
+      `experience://${parentExperience.record.id}`,
+    ]),
+    related_records: unique([
+      parentDecision.record.id,
+      parentExperiment.record.id,
+      parentExperience.record.id,
+    ]),
+  }, clock, registry);
+  return {
+    ...proposal,
+    command: "start-follow-up",
+    parent_business_id: parentId,
+    parent_outcome: outcome,
   };
 }
 
@@ -1466,6 +1554,13 @@ export function createGenesisService({
         }
         return startBusinessProposal({ ...input, business_id: normalized }, clock, activeRegistry);
       }, "start-business");
+    },
+
+    async startFollowUp(parentBusinessId, input) {
+      return runWithProposal(
+        () => startFollowUpProposal(projectRoot, parentBusinessId, input, clock, activeRegistry),
+        "start-follow-up",
+      );
     },
 
     async addEvidence(businessId, input) {

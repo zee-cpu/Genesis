@@ -10,6 +10,7 @@ import { renderApprovalReview, renderCliError, renderGuidedApprovalProposal, ren
 const HELP = [
   "Usage:",
   "  genesis start-business",
+  "  genesis start-follow-up <business-id>",
   "  genesis add-evidence <business-id>",
   "  genesis status <business-id>",
   "  genesis next <business-id>",
@@ -138,6 +139,44 @@ async function gatherStartBusinessInput(prompter, output) {
     decision,
     owner,
     review_date,
+  };
+}
+
+async function gatherFollowUpInput(prompter, guidance) {
+  const defaults = guidance.defaults ?? {};
+  return {
+    business_id: await askRequired(prompter, `New follow-up business ID [${defaults.business_id}]: `, defaults.business_id),
+    target_customer: await askRequired(prompter, `Target customer [${defaults.target_customer}]: `, defaults.target_customer),
+    problem: await askRequired(prompter, "New or narrowed customer problem: "),
+    hypothesis: await askRequired(prompter, "New testable hypothesis: "),
+    confidence: await askGuidedNumber(prompter, `Starting confidence [${defaults.confidence}]: `, {
+      fallback: defaults.confidence,
+      maximum: 1,
+    }),
+    source_reference: await askRequired(
+      prompter,
+      `Initial evidence source [${defaults.source_reference}]: `,
+      defaults.source_reference,
+    ),
+    summary: await askRequired(prompter, `Evidence summary [${defaults.summary}]: `, defaults.summary),
+    stance: await prompter.choose("Does this evidence support or contradict the new hypothesis?", ["support", "contradict"]),
+    provenance: await askRequired(prompter, `Evidence provenance [${defaults.provenance}]: `, defaults.provenance),
+    privacy_classification: await askGuidedChoice(
+      prompter,
+      `Privacy classification [${defaults.privacy_classification}]: `,
+      ["internal", "public", "confidential"],
+      defaults.privacy_classification,
+    ),
+    counterevidence: parseCommaList(
+      await prompter.ask(`Counterevidence [${(defaults.counterevidence ?? []).join(",")}]: `),
+      defaults.counterevidence ?? [],
+    ),
+    alternatives: await askGuidedList(prompter, "Alternatives to this follow-up (comma-separated): "),
+    expected_outcome: await askRequired(prompter, "Expected observable outcome: "),
+    metric: await askRequired(prompter, "Decision metric: "),
+    decision: await askRequired(prompter, "Decision this follow-up should support: "),
+    owner: await askRequired(prompter, `Owner [${defaults.owner}]: `, defaults.owner),
+    review_date: await askRequired(prompter, `Review date [${defaults.review_date}]: `, defaults.review_date),
   };
 }
 
@@ -455,6 +494,21 @@ export async function runCli(argv, dependencies = {}) {
       return 0;
     }
 
+    if (command === "start-follow-up") {
+      if (!businessId) {
+        usage(output);
+        return 2;
+      }
+      const guidance = await service.next(businessId);
+      writeLine(output, renderNextGuidance(guidance));
+      const result = await service.startFollowUp(
+        businessId,
+        await gatherFollowUpInput(prompter, guidance),
+      );
+      writeMutationResult(result, output, errorOutput);
+      return 0;
+    }
+
     if (command === "add-evidence") {
       if (!businessId) {
         usage(output);
@@ -576,6 +630,15 @@ export async function runCli(argv, dependencies = {}) {
         const result = await service.closeExperiment(businessId, {
           actor: guidance.defaults.actor,
         });
+        writeMutationResult(result, output, errorOutput);
+        return 0;
+      }
+
+      if (guidance.action === "start_follow_up") {
+        const result = await service.startFollowUp(
+          businessId,
+          await gatherFollowUpInput(prompter, guidance),
+        );
         writeMutationResult(result, output, errorOutput);
         return 0;
       }

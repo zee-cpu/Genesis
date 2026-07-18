@@ -131,6 +131,29 @@ function outcomeDecisionInput(overrides = {}) {
   };
 }
 
+function followUpInput(overrides = {}) {
+  return {
+    business_id: "bakery-pivot-01",
+    target_customer: "Independent bakery owners with recurring reconciliation work",
+    problem: "The first sample was too small to justify scale",
+    hypothesis: "A larger bounded sample will reproduce the observed time reduction",
+    confidence: 0.7,
+    source_reference: "experience://bakery-experience-001",
+    summary: "The first experiment passed with limited sample quality",
+    stance: "support",
+    provenance: "Genesis reviewed experience bakery-experience-001",
+    privacy_classification: "internal",
+    counterevidence: ["interview://owner-2"],
+    alternatives: ["archive", "run_smaller_segment_test"],
+    expected_outcome: "The larger sample preserves at least a 60-minute reduction",
+    metric: "median_reconciliation_minutes",
+    decision: "decide_whether_scale_readiness_is_supported",
+    owner: "research",
+    review_date: "2026-07-31T12:00:00Z",
+    ...overrides,
+  };
+}
+
 function createService(projectRoot, confirm = async () => true) {
   return createGenesisService({
     projectRoot,
@@ -283,7 +306,26 @@ await runSection("guidedNextUsesProjectionAndLifecycleState", async () => {
     const closed = await service.closeExperiment("bakery", { actor: "analyst" });
     assert.equal(closed.state, "closed");
     assert.equal(closed.record.status, "closed");
-    assert.equal((await service.next("bakery")).action, "no_transition");
+    const continuation = await service.next("bakery");
+    assert.equal(continuation.action, "start_follow_up");
+    assert.equal(continuation.defaults.business_id, "bakery-pivot-01");
+
+    await assert.rejects(
+      () => service.startFollowUp("bakery", followUpInput({ business_id: "bakery" })),
+      (error) => error.code === "FOLLOW_UP_ID_REUSED",
+    );
+    const followUp = await service.startFollowUp("bakery", followUpInput());
+    assert.equal(followUp.state, "discover");
+    assert.equal(followUp.business_id, "bakery-pivot-01");
+    const followStatus = await service.status("bakery-pivot-01");
+    assert.equal(followStatus.state, "discover");
+    assert.equal(followStatus.approval_versions, 0);
+    const followDecisionDescriptor = listRecords(projectRoot).find((item) => (
+      item.kind === "decision" && item.id === "bakery-pivot-01-decision"
+    ));
+    const followDecision = readRecord(followDecisionDescriptor.absolutePath);
+    assert.equal(followDecision.related_records.includes("bakery-experience-001"), true);
+    assert.equal((await service.status("bakery")).state, "closed");
 
     const rebuild = await service.rebuildIndex();
     assert.equal(rebuild.projection_consistent, true);
