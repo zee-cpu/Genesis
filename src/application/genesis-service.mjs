@@ -375,7 +375,7 @@ function planExperimentProposal(projectRoot, businessId, input, clock, registry)
   };
 }
 
-async function persistCommand({ projectRoot, registry, proposal }) {
+async function persistCommand({ projectRoot, registry, proposal, projectRecords = projectWrittenRecords }) {
   const written = [];
   const items = proposal.records ?? (proposal.record ? [
     {
@@ -399,11 +399,20 @@ async function persistCommand({ projectRoot, registry, proposal }) {
     });
   }
 
-  return {
-    items,
-    written,
-    ...projectWrittenRecords({ projectRoot, registry, written }),
-  };
+  try {
+    return {
+      items,
+      written,
+      ...await projectRecords({ projectRoot, registry, written }),
+    };
+  } catch (cause) {
+    return {
+      items,
+      written,
+      projection_stale: true,
+      warning: projectionIssue(cause),
+    };
+  }
 }
 
 export function createGenesisService({
@@ -412,6 +421,7 @@ export function createGenesisService({
   clock = DEFAULT_CLOCK,
   confirm = DEFAULT_CONFIRM,
   registry,
+  projectRecords = projectWrittenRecords,
 } = {}) {
   if (!projectRoot) {
     throw new GenesisError("PROJECT_ROOT_REQUIRED", "A project root is required", {
@@ -434,6 +444,7 @@ export function createGenesisService({
         projectRoot,
         registry: activeRegistry,
         proposal,
+        projectRecords,
       });
 
       const status = currentStatus({
