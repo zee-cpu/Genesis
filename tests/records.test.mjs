@@ -270,6 +270,22 @@ test("learning-lab decisions require their complete governance envelope", () => 
   assert.equal(validateComplete(decision), true, JSON.stringify(validateComplete.errors));
 });
 
+test("decision and experiment correction metadata is schema constrained", () => {
+  for (const recordId of ["decision_record", "experiment_record"]) {
+    const record = loadTemplate(recordId);
+    record.correction = {
+      reason: "An operator entered the wrong baseline.",
+      corrected_fields: ["baseline"],
+      supersedes_version: `records/${recordId}.v0001.yaml`,
+    };
+    const valid = compileSchema(recordId);
+    assert.equal(valid(record), true, JSON.stringify(valid.errors));
+    delete record.correction.reason;
+    const invalid = compileSchema(recordId);
+    assert.equal(invalid(record), false);
+  }
+});
+
 test("Major Bet decisions require reviews, recommendation, and approval", () => {
   const decision = loadTemplate("decision_record");
   decision.decision_class = "major_bet";

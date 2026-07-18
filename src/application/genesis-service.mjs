@@ -943,6 +943,147 @@ function addEvidenceProposal(projectRoot, businessId, input, clock, registry) {
   };
 }
 
+const DECISION_CORRECTION_FIELDS = new Set([
+  "owner", "target_customer", "problem", "hypothesis", "confidence", "counterevidence",
+  "alternatives", "expected_outcome", "metric", "decision", "review_date", "privacy_classification",
+]);
+const EXPERIMENT_REVISION_FIELDS = new Set([
+  "owner", "problem", "hypothesis", "confidence", "evidence", "counterevidence", "baseline",
+  "comparison_method", "metric", "expected_outcome", "minimum_meaningful_effect",
+  "failure_conditions", "stop_conditions", "limits", "decision_date", "allowed_outcomes",
+  "privacy_classification",
+]);
+
+function correctionChanges(input, allowedFields, recordPath) {
+  if (!input?.correction_reason?.trim()) {
+    throw new GenesisError("CORRECTION_REASON_REQUIRED", "A correction reason is required", {
+      path: "/correction_reason",
+      correction: "Explain the factual operator mistake being corrected",
+      escalation: "operator",
+    });
+  }
+  const changes = input.changes;
+  const fields = changes && typeof changes === "object" && !Array.isArray(changes)
+    ? Object.keys(changes)
+    : [];
+  if (fields.length === 0) {
+    throw new GenesisError("CORRECTION_FIELDS_REQUIRED", "At least one corrected field is required", {
+      path: "/changes",
+      correction: "Provide a non-empty object of corrected fields",
+      escalation: "operator",
+    });
+  }
+  const forbidden = fields.find((field) => !allowedFields.has(field));
+  if (forbidden) {
+    throw new GenesisError("CORRECTION_FIELD_FORBIDDEN", "The requested field cannot be changed through this correction workflow", {
+      path: `/changes/${forbidden}`,
+      correction: `Correct only mutable ${recordPath} fields; identity, history, state, and authority fields are immutable`,
+      escalation: "operator",
+    });
+  }
+  return { changes, fields: [...fields].sort() };
+}
+
+function correctDecisionProposal(projectRoot, businessId, input, clock, registry) {
+  const normalized = normalizeBusinessId(businessId);
+  const { entries, decisionEntries, experimentEntries } = businessEntries(projectRoot, normalized);
+  ensureBusinessExists(decisionEntries, normalized);
+  if (experimentEntries.length > 0) {
+    throw new GenesisError("DECISION_CORRECTION_LOCKED", "The discovery decision is locked after experiment planning", {
+      path: "/decision",
+      correction: "Preserve the decision history; revise the draft experiment or start a new governed workflow",
+      escalation: "research",
+    });
+  }
+  const latest = latestDecisionEntry(entries);
+  const { changes, fields } = correctionChanges(input, DECISION_CORRECTION_FIELDS, "decision");
+  const record = versionDecisionRecord(latest.record, {
+    ...changes,
+    correction: {
+      reason: input.correction_reason.trim(),
+      corrected_fields: fields,
+      supersedes_version: latest.descriptor.relativePath,
+    },
+  }, latest.descriptor.relativePath, clock, { registry });
+  return {
+    command: "correct-decision",
+    business_id: normalized,
+    state: "discover",
+    records: [{ kind: "decision", record, version: latest.descriptor.version + 1 }],
+  };
+}
+
+function validateLearningLabPlan(decision, input, clock) {
+  const learningLab = decision.learning_lab;
+  if (decision.continuation_type !== "learning_lab") return;
+  if (input.owner !== learningLab.owner) {
+    throw new GenesisError("LEARNING_LAB_OWNER_MISMATCH", "Experiment owner does not match Learning Lab governance", {
+      path: "/owner", correction: `Use the governed Learning Lab owner ${learningLab.owner}`, escalation: "ceo",
+    });
+  }
+  if (input.metric?.formula !== learningLab.learning_metric) {
+    throw new GenesisError("LEARNING_LAB_METRIC_MISMATCH", "Experiment metric does not match the governed learning metric", {
+      path: "/metric/formula", correction: `Use the governed learning metric: ${learningLab.learning_metric}`, escalation: "analyst",
+    });
+  }
+  if (input.limits?.cash_usd > learningLab.budget.cash_usd || input.limits?.labor_hours > learningLab.budget.labor_hours) {
+    throw new GenesisError("LEARNING_LAB_BUDGET_EXCEEDED", "Experiment limits exceed the Learning Lab budget", {
+      path: "/limits", correction: "Reduce cash and labor limits to the governed Learning Lab budget", escalation: "ceo",
+    });
+  }
+  const decisionTime = Date.parse(input.decision_date);
+  const expiry = Date.parse(learningLab.expiry);
+  const plannedEnd = decisionTime + ((input.limits?.duration_days ?? 0) * 86_400_000);
+  if (!Number.isFinite(decisionTime) || clock().getTime() >= expiry || plannedEnd > expiry) {
+    throw new GenesisError("LEARNING_LAB_EXPIRY_EXCEEDED", "Experiment duration extends beyond Learning Lab expiry", {
+      path: "/limits/duration_days", correction: "Shorten the plan so it ends on or before the governed expiry", escalation: "ceo",
+    });
+  }
+}
+
+function reviseExperimentProposal(projectRoot, businessId, input, clock, registry) {
+  const normalized = normalizeBusinessId(businessId);
+  const { entries, decisionEntries, experimentEntries } = businessEntries(projectRoot, normalized);
+  ensureBusinessExists(decisionEntries, normalized);
+  ensureExperimentExists(experimentEntries);
+  const latest = latestExperimentEntry(entries);
+  if (latest.record.status !== "draft") {
+    throw new GenesisError("EXPERIMENT_REVISION_LOCKED", "Only a draft experiment can be revised", {
+      path: "/experiment/status",
+      correction: "Preserve active and completed evidence; use the governed lifecycle instead of rewriting it",
+      escalation: "research",
+    });
+  }
+  const approval = latestApprovalEntry(entries)?.record;
+  if (approval?.decision === "approved" && !approval.revoked) {
+    throw new GenesisError("APPROVAL_REVOCATION_REQUIRED", "An approved draft cannot be revised while its approval remains recorded", {
+      path: "/approval",
+      correction: "Revoke the approval before revising the experiment envelope",
+      escalation: "human_authority",
+    });
+  }
+  const { changes, fields } = correctionChanges(input, EXPERIMENT_REVISION_FIELDS, "experiment");
+  const nextSnapshot = { ...latest.record, ...changes };
+  validateLearningLabPlan(latestDecisionEntry(entries).record, nextSnapshot, clock);
+  const record = versionExperimentRecord(latest.record, {
+    ...changes,
+    status: "draft",
+    validation_outcome: "pending",
+    approval_references: [],
+    correction: {
+      reason: input.correction_reason.trim(),
+      corrected_fields: fields,
+      supersedes_version: latest.descriptor.relativePath,
+    },
+  }, latest.descriptor.relativePath, clock, { registry });
+  return {
+    command: "revise-experiment",
+    business_id: normalized,
+    state: "approval_pending",
+    records: [{ kind: "experiment", record, version: latest.descriptor.version + 1 }],
+  };
+}
+
 function planExperimentProposal(projectRoot, businessId, input, clock, registry) {
   const normalized = normalizeBusinessId(businessId);
   const { entries, decisionEntries, experimentEntries, evidenceEntries } = businessEntries(projectRoot, normalized);
@@ -976,47 +1117,7 @@ function planExperimentProposal(projectRoot, businessId, input, clock, registry)
     });
   }
 
-  const learningLab = latestDecision.record.learning_lab;
-  if (latestDecision.record.continuation_type === "learning_lab") {
-    if (input.owner !== learningLab.owner) {
-      throw new GenesisError("LEARNING_LAB_OWNER_MISMATCH", "Experiment owner does not match Learning Lab governance", {
-        path: "/owner",
-        correction: `Use the governed Learning Lab owner ${learningLab.owner}`,
-        escalation: "ceo",
-      });
-    }
-    if (input.metric?.formula !== learningLab.learning_metric) {
-      throw new GenesisError("LEARNING_LAB_METRIC_MISMATCH", "Experiment metric does not match the governed learning metric", {
-        path: "/metric/formula",
-        correction: `Use the governed learning metric: ${learningLab.learning_metric}`,
-        escalation: "analyst",
-      });
-    }
-    if (
-      input.limits?.cash_usd > learningLab.budget.cash_usd
-      || input.limits?.labor_hours > learningLab.budget.labor_hours
-    ) {
-      throw new GenesisError("LEARNING_LAB_BUDGET_EXCEEDED", "Experiment limits exceed the Learning Lab budget", {
-        path: "/limits",
-        correction: "Reduce cash and labor limits to the governed Learning Lab budget",
-        escalation: "ceo",
-      });
-    }
-    const decisionTime = Date.parse(input.decision_date);
-    const plannedEnd = decisionTime + ((input.limits?.duration_days ?? 0) * 86_400_000);
-    const learningLabExpiry = Date.parse(learningLab.expiry);
-    if (
-      !Number.isFinite(decisionTime)
-      || clock().getTime() >= learningLabExpiry
-      || plannedEnd > learningLabExpiry
-    ) {
-      throw new GenesisError("LEARNING_LAB_EXPIRY_EXCEEDED", "Experiment duration extends beyond Learning Lab expiry", {
-        path: "/limits/duration_days",
-        correction: "Shorten the plan so it ends on or before the governed expiry",
-        escalation: "ceo",
-      });
-    }
-  }
+  validateLearningLabPlan(latestDecision.record, input, clock);
 
   const supportingEvidence = evidenceEntries.filter(({ record }) => record.stance === "support");
   const contradictingEvidence = evidenceEntries.filter(({ record }) => record.stance === "contradict");
@@ -1888,8 +1989,22 @@ export function createGenesisService({
       return runWithProposal(() => addEvidenceProposal(projectRoot, businessId, input, clock, activeRegistry), "add-evidence");
     },
 
+    async correctDecision(businessId, input) {
+      return runWithProposal(
+        () => correctDecisionProposal(projectRoot, businessId, input, clock, activeRegistry),
+        "correct-decision",
+      );
+    },
+
     async planExperiment(businessId, input) {
       return runWithProposal(() => planExperimentProposal(projectRoot, businessId, input, clock, activeRegistry), "plan-experiment");
+    },
+
+    async reviseExperiment(businessId, input) {
+      return runWithProposal(
+        () => reviseExperimentProposal(projectRoot, businessId, input, clock, activeRegistry),
+        "revise-experiment",
+      );
     },
 
     async reviewExperiment(businessId) {

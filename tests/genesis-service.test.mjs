@@ -273,6 +273,70 @@ await runSection("listOpportunities", async () => {
   }
 });
 
+await runSection("appendOnlyCorrectionsAndDraftRevisions", async () => {
+  const projectRoot = makeProjectRoot();
+  try {
+    const service = createService(projectRoot);
+    await service.startBusiness(startBusinessInput());
+
+    await assert.rejects(
+      () => service.correctDecision("bakery", {
+        correction_reason: "Attempted identity rewrite",
+        changes: { affected_business: "another-business" },
+      }),
+      (error) => error.code === "CORRECTION_FIELD_FORBIDDEN",
+    );
+    const corrected = await service.correctDecision("bakery", {
+      correction_reason: "The operator entered the weekly duration incorrectly.",
+      changes: {
+        problem: "Weekly order reconciliation takes more than three hours",
+        confidence: 0.5,
+      },
+    });
+    assert.equal(corrected.state, "discover");
+    assert.equal(corrected.status.decision_versions, 2);
+    assert.equal(corrected.record.problem, "Weekly order reconciliation takes more than three hours");
+    assert.deepEqual(corrected.record.correction.corrected_fields, ["confidence", "problem"]);
+    assert.equal(corrected.record.correction.supersedes_version, ".genesis/records/decisions/bakery-decision.v0001.yaml");
+
+    await service.planExperiment("bakery", experimentInput());
+    await assert.rejects(
+      () => service.correctDecision("bakery", {
+        correction_reason: "Too late",
+        changes: { problem: "A different problem" },
+      }),
+      (error) => error.code === "DECISION_CORRECTION_LOCKED",
+    );
+    await assert.rejects(
+      () => service.reviseExperiment("bakery", {
+        correction_reason: "Attempted state rewrite",
+        changes: { status: "active" },
+      }),
+      (error) => error.code === "CORRECTION_FIELD_FORBIDDEN",
+    );
+    const revised = await service.reviseExperiment("bakery", {
+      correction_reason: "The baseline unit was entered incorrectly.",
+      changes: { baseline: "Owners currently take three hours each week" },
+    });
+    assert.equal(revised.state, "approval_pending");
+    assert.equal(revised.status.experiment_versions, 2);
+    assert.equal(revised.record.baseline, "Owners currently take three hours each week");
+    assert.equal(revised.record.correction.supersedes_version, ".genesis/records/experiments/bakery-experiment.v0001.yaml");
+    assert.deepEqual(revised.record.approval_references, []);
+
+    await service.approveExperiment("bakery", approvalInput());
+    await assert.rejects(
+      () => service.reviseExperiment("bakery", {
+        correction_reason: "Approval must be revoked first.",
+        changes: { baseline: "Another baseline" },
+      }),
+      (error) => error.code === "APPROVAL_REVOCATION_REQUIRED",
+    );
+  } finally {
+    cleanupProjectRoot(projectRoot);
+  }
+});
+
 await runSection("guidedNextUsesProjectionAndLifecycleState", async () => {
   const projectRoot = makeProjectRoot();
   try {

@@ -14,10 +14,12 @@ const HELP = [
   "  genesis start-follow-up <business-id>",
   "  genesis start-learning-lab <business-id>",
   "  genesis add-evidence <business-id>",
+  "  genesis correct-decision <business-id>",
   "  genesis list",
   "  genesis status <business-id>",
   "  genesis next <business-id>",
   "  genesis plan-experiment <business-id>",
+  "  genesis revise-experiment <business-id>",
   "  genesis review-experiment <business-id>",
   "  genesis approve-experiment <business-id>",
   "  genesis deny-experiment <business-id>",
@@ -281,6 +283,32 @@ async function gatherAddEvidenceInput(prompter, output) {
     stance,
     provenance,
     privacy_classification,
+  };
+}
+
+async function gatherDecisionCorrectionInput(prompter) {
+  const correction_reason = await askRequired(prompter, "Why is this correction necessary? ");
+  const fields = await askGuidedList(prompter, "Decision fields to correct (comma-separated): ");
+  const changes = {};
+  for (const field of fields) {
+    if (["counterevidence", "alternatives"].includes(field)) {
+      changes[field] = await askGuidedList(prompter, `New ${field} values (comma-separated): `);
+    } else if (field === "confidence") {
+      changes[field] = await askGuidedNumber(prompter, "New confidence (0-1): ", {
+        fallback: Number.NaN,
+        maximum: 1,
+      });
+    } else {
+      changes[field] = await askRequired(prompter, `New ${field}: `);
+    }
+  }
+  return { correction_reason, changes };
+}
+
+async function gatherExperimentRevisionInput(prompter, output, currentDecisionId) {
+  return {
+    correction_reason: await askRequired(prompter, "Why must this draft experiment be revised? "),
+    changes: await gatherPlanExperimentInput(prompter, output, currentDecisionId),
   };
 }
 
@@ -651,6 +679,19 @@ export async function runCli(argv, dependencies = {}) {
       return 0;
     }
 
+    if (command === "correct-decision") {
+      if (!businessId) {
+        usage(output);
+        return 2;
+      }
+      const result = await service.correctDecision(
+        businessId,
+        structuredInput ?? await gatherDecisionCorrectionInput(prompter),
+      );
+      writeMutationResult(result, output, errorOutput);
+      return 0;
+    }
+
     if (command === "status") {
       if (!businessId) {
         usage(output);
@@ -812,6 +853,23 @@ export async function runCli(argv, dependencies = {}) {
         writeLine(errorOutput, renderCliError(result.warning));
       }
       writeLine(output, renderStatus(result.status));
+      return 0;
+    }
+
+    if (command === "revise-experiment") {
+      if (!businessId) {
+        usage(output);
+        return 2;
+      }
+      const status = await service.status(businessId);
+      const currentDecisionId = status.latest_decision_path
+        ? status.latest_decision_path.split("/").at(-1)?.replace(/\.v\d{4}\.yaml$/, "")
+        : `${businessId}-decision`;
+      const result = await service.reviseExperiment(
+        businessId,
+        structuredInput ?? await gatherExperimentRevisionInput(prompter, output, currentDecisionId),
+      );
+      writeMutationResult(result, output, errorOutput);
       return 0;
     }
 

@@ -62,7 +62,8 @@
     "results": { "$ref": "#/$defs/nonempty" }, "reflection": { "$ref": "#/$defs/nonempty" },
     "outcome": { "enum": ["scale", "pivot", "learning_lab", "archive", "kill"] }, "experience_reference": { "$ref": "#/$defs/recordRef" },
     "confidence_update": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
-    "decision_outcome": { "type": ["string", "null"], "enum": ["scale", "pivot", "learning_lab", "archive", "kill", null] }
+    "decision_outcome": { "type": ["string", "null"], "enum": ["scale", "pivot", "learning_lab", "archive", "kill", null] },
+    "correction": { "$ref": "#/$defs/correction" }
   },
   "allOf": [
     {
@@ -121,6 +122,15 @@
     "nonemptyRecordRefs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/recordRef" } },
     "nonemptyRefs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/nonempty" } },
     "experimentDataClasses": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["public", "internal", "confidential"] } },
-    "privacy": { "enum": ["public", "internal", "confidential", "restricted"] }
+    "privacy": { "enum": ["public", "internal", "confidential", "restricted"] },
+    "correction": {
+      "type": "object", "additionalProperties": false,
+      "required": ["reason", "corrected_fields", "supersedes_version"],
+      "properties": {
+        "reason": { "$ref": "#/$defs/nonempty" },
+        "corrected_fields": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/nonempty" } },
+        "supersedes_version": { "$ref": "#/$defs/nonempty" }
+      }
+    }
   }
 }

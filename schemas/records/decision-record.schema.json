@@ -46,7 +46,8 @@
         "monthly_review": { "$ref": "#/$defs/dateTime" },
         "expiry": { "$ref": "#/$defs/dateTime" }
       }
-    }
+    },
+    "correction": { "$ref": "#/$defs/correction" }
   },
   "allOf": [
     {
@@ -78,6 +79,15 @@
     "recordRefs": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/recordRef" } },
     "nonemptyRecordRefs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/recordRef" } },
     "nonemptyRefs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/nonempty" } },
-    "privacy": { "enum": ["public", "internal", "confidential", "restricted"] }
+    "privacy": { "enum": ["public", "internal", "confidential", "restricted"] },
+    "correction": {
+      "type": "object", "additionalProperties": false,
+      "required": ["reason", "corrected_fields", "supersedes_version"],
+      "properties": {
+        "reason": { "$ref": "#/$defs/nonempty" },
+        "corrected_fields": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/nonempty" } },
+        "supersedes_version": { "$ref": "#/$defs/nonempty" }
+      }
+    }
   }
 }

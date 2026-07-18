@@ -391,10 +391,12 @@ genesis plan-experiment bakery --input experiment-proposal.json
 | `genesis start-follow-up <business-id>` | Create a separately governed follow-up after a closed `pivot` or `scale` | Yes, after confirmation | New business in `discover` |
 | `genesis start-learning-lab <business-id>` | Allocate a bounded Learning Lab after a closed, failed initiative classified `learning_lab` | Yes, after confirmation | New business in `discover` |
 | `genesis add-evidence <business-id>` | Add evidence and version the associated decision | Yes, after confirmation | `discover` |
+| `genesis correct-decision <business-id>` | Correct mutable discovery fields by appending a reasoned decision version | Yes, after confirmation | `discover` |
 | `genesis list` | List all projected opportunities with state, next action, review timing, and the first actionable blocker | No | Unchanged |
 | `genesis status <business-id>` | Show state, gates, metrics, limits, blocked commands, and projection health | No | Unchanged |
 | `genesis next <business-id>` | Explain the projected state and guide the next valid transition one question at a time | Only when the guided proposal is confirmed | Depends on current state |
 | `genesis plan-experiment <business-id>` | Create a complete validation-experiment preregistration | Yes, after confirmation | `approval_pending` |
+| `genesis revise-experiment <business-id>` | Correct a draft preregistration and require review of the new immutable version | Yes, after confirmation | `approval_pending` or `approval_denied` |
 | `genesis review-experiment <business-id>` | Display the exact experiment and approval envelope for review | No | Unchanged |
 | `genesis approve-experiment <business-id>` | Record an explicit Human Authority approval | Yes, after confirmation | `approved` |
 | `genesis deny-experiment <business-id>` | Record an explicit Human Authority denial | Yes, after confirmation | `approval_denied` |
@@ -711,7 +713,7 @@ Current technical boundaries include:
 
 - structured input is JSON-file based and still requires interactive confirmation; there is no unattended approval mode;
 - one local operator and one process per workspace operation;
-- no supported command to edit a mistaken record or create a superseding correction;
+- corrections are intentionally limited to discovery decisions and draft experiments; evidence and active/completed lifecycle records remain immutable;
 - terminal-driven review only; no web approval inbox, authentication, signatures, or cryptographic identity proof;
 - operator identities are locally entered and type-checked, so filesystem access remains part of the trust boundary;
 - the `active` transition records authorization state but does not run experiment tasks;
@@ -729,7 +731,7 @@ Treat the broader policies as the target governance contract and the current CLI
 
 The current engine is ready for local, controlled use across one complete governed validation lifecycle: opportunity, evidence, preregistration, approval, activation, execution evidence, measurement, reflection, Major Bet outcome decision, experience preservation, and closure. The most valuable next product increments are:
 
-1. **Operator experience:** add broader correction workflows and search on top of the guided `list` and `next` commands.
+1. **Operator experience:** add evidence search and filtered opportunity views on top of `list` and `next`.
 2. **Customer-reality integrations:** import approved evidence without granting retrieved content authority.
 3. **Packaging and release:** publish a versioned distribution with migration and compatibility guarantees.
 4. **Identity and access (deferred):** authenticate operators and bind Human Authority actions to verifiable identities before any hosted or multi-user use.

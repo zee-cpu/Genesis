@@ -71,6 +71,8 @@ genesis next <business-id>
 
 Use `--json` with `list`, `status`, `next`, `review-experiment`, or `rebuild-index` for machine-readable output. Use `--input <file.json>` with a mutation command to load proposal fields without answering each prompt. Structured input still passes through the same proposal preview, schema and policy checks, immutable storage path, and final confirmation; it never supplies authority by itself.
 
+Operator mistakes are corrected through new versions, never in-place edits. `genesis correct-decision <business-id>` is limited to mutable discovery fields before an experiment exists. `genesis revise-experiment <business-id>` is limited to draft preregistrations and rejects identity, history, lifecycle, execution, and authority fields. An approved draft must have its approval revoked before revision. Every correction stores its reason, corrected fields, and superseded version path.
+
 ## Change workflow
 
 1. Identify the external decision and affected normative files.
