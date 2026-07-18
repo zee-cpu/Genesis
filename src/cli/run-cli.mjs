@@ -5,7 +5,7 @@ import { createGenesisService } from "../application/genesis-service.mjs";
 import { suggestionsFor } from "../core/suggestions.mjs";
 import { GenesisError, formatError } from "../core/errors.mjs";
 import { createPrompter } from "./prompter.mjs";
-import { renderApprovalReview, renderCliError, renderGuidedApprovalProposal, renderNextGuidance, renderOutcomeDecisionProposal, renderProposal, renderRebuildResult, renderStatus } from "./render.mjs";
+import { renderApprovalReview, renderCliError, renderGuidedApprovalProposal, renderNextGuidance, renderOpportunityList, renderOutcomeDecisionProposal, renderProposal, renderRebuildResult, renderStatus } from "./render.mjs";
 
 const HELP = [
   "Usage:",
@@ -13,6 +13,7 @@ const HELP = [
   "  genesis start-follow-up <business-id>",
   "  genesis start-learning-lab <business-id>",
   "  genesis add-evidence <business-id>",
+  "  genesis list",
   "  genesis status <business-id>",
   "  genesis next <business-id>",
   "  genesis plan-experiment <business-id>",
@@ -576,6 +577,12 @@ export async function runCli(argv, dependencies = {}) {
       }
       const status = await service.status(businessId);
       writeLine(output, renderStatus(status));
+      return 0;
+    }
+
+    if (command === "list") {
+      const result = await service.list();
+      writeLine(output, renderOpportunityList(result));
       return 0;
     }
 

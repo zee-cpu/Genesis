@@ -373,6 +373,7 @@ This validates every canonical YAML record and replaces the SQLite projection wi
 | `genesis start-follow-up <business-id>` | Create a separately governed follow-up after a closed `pivot` or `scale` | Yes, after confirmation | New business in `discover` |
 | `genesis start-learning-lab <business-id>` | Allocate a bounded Learning Lab after a closed, failed initiative classified `learning_lab` | Yes, after confirmation | New business in `discover` |
 | `genesis add-evidence <business-id>` | Add evidence and version the associated decision | Yes, after confirmation | `discover` |
+| `genesis list` | List all projected opportunities with state, next action, review timing, and the first actionable blocker | No | Unchanged |
 | `genesis status <business-id>` | Show state, gates, metrics, limits, blocked commands, and projection health | No | Unchanged |
 | `genesis next <business-id>` | Explain the projected state and guide the next valid transition one question at a time | Only when the guided proposal is confirmed | Depends on current state |
 | `genesis plan-experiment <business-id>` | Create a complete validation-experiment preregistration | Yes, after confirmation | `approval_pending` |
@@ -466,7 +467,7 @@ Genesis creates `.genesis/workspace.lock` with exclusive creation while it reads
 - preregistration completeness ratio; and
 - confidence history across decision versions.
 
-`genesis next <business-id>` is the operator-oriented companion to status. It fails closed when the projection is missing or inconsistent, derives safe values such as supported-decision references and approval timestamps, and routes the resulting proposal through the same schema, approval, append-only storage, and projection checks as the direct commands. A closed failed initiative classified `learning_lab` is routed to a new child opportunity with its own budget, owner, learning metric, monthly review, and expiry. It inherits no approval or execution authority, and its experiment still requires normal preregistration and Human Authority approval.
+`genesis list` is the read-only operator inbox. It reads opportunity identities and projected states from SQLite, verifies the index against canonical YAML, and shows the next guided action, nearest applicable review, and first actionable blocker. `genesis next <business-id>` then handles one selected opportunity. It fails closed when the projection is missing or inconsistent, derives safe values such as supported-decision references and approval timestamps, and routes the resulting proposal through the same schema, approval, append-only storage, and projection checks as the direct commands. A closed failed initiative classified `learning_lab` is routed to a new child opportunity with its own budget, owner, learning metric, monthly review, and expiry. It inherits no approval or execution authority, and its experiment still requires normal preregistration and Human Authority approval.
 
 These are early workflow metrics, not proof that a business is viable. The broader normative metric definitions live in [`config/metrics-policy.yaml`](config/metrics-policy.yaml).
 
@@ -692,7 +693,6 @@ Current technical boundaries include:
 
 - guided and direct interactive prompts only; no flags, input file, JSON output, or non-interactive mode;
 - one local operator and one process per workspace operation;
-- no command to list all opportunities;
 - no supported command to edit a mistaken record or create a superseding correction;
 - terminal-driven review only; no web approval inbox, authentication, signatures, or cryptographic identity proof;
 - operator identities are locally entered and type-checked, so filesystem access remains part of the trust boundary;

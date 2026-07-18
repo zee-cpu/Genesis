@@ -371,6 +371,13 @@ export function readOpportunity(db, businessId) {
   return getOpportunity(db, businessId);
 }
 
+export function readOpportunities(db) {
+  return db.prepare(`
+    SELECT * FROM opportunities
+    ORDER BY updated_at DESC, business_id ASC
+  `).all();
+}
+
 export function readApprovals(db, businessId) {
   return db.prepare(`
     SELECT * FROM approval_records

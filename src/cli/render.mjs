@@ -69,6 +69,30 @@ export function renderStatus(status) {
   ].join("\n");
 }
 
+export function renderOpportunityList(result) {
+  if (result.opportunities.length === 0) {
+    return "No opportunities found. Start one with: genesis start-business";
+  }
+
+  const lines = [
+    `Opportunities: ${result.count}`,
+    `Projection consistent: ${result.projection_consistent ? "yes" : "no"}`,
+    "",
+  ];
+  for (const opportunity of result.opportunities) {
+    lines.push(
+      opportunity.business_id,
+      `  State: ${opportunity.state}`,
+      `  Next: genesis next ${opportunity.business_id} (${opportunity.next_command})`,
+      `  Review: ${opportunity.review_due_at ?? "none"}${opportunity.review_due_at ? ` (${opportunity.review_status}, ${opportunity.review_type})` : ""}`,
+      `  Blocker: ${opportunity.blocker ? `${opportunity.blocker.code} — ${opportunity.blocker.correction}` : "none"}`,
+      `  Updated: ${opportunity.updated_at}`,
+      "",
+    );
+  }
+  return lines.join("\n").trimEnd();
+}
+
 export function renderApprovalReview(review) {
   const blockers = review.approval_validity?.blockers ?? [];
   return [

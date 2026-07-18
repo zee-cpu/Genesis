@@ -63,10 +63,11 @@ The local CLI does not authenticate or cryptographically verify the names entere
 For an existing opportunity, run:
 
 ```bash
+genesis list
 genesis next <business-id>
 ```
 
-The command reads the lifecycle state from SQLite, verifies that the projection matches canonical YAML, and explains the next supported action. It pulls reusable values from existing records, calculates system timestamps through the configured clock, validates typed input while prompting, and delegates every mutation to the existing service methods. During experiment approval it renders one consolidated authority envelope immediately before the final confirmation. The guided layer does not weaken schemas, approval validity, append-only storage, or rebuild behavior.
+`genesis list` provides a read-only operator inbox with projected state, next action, nearest review timing, and the first actionable blocker. `genesis next` reads the selected lifecycle state from SQLite, verifies that the projection matches canonical YAML, and explains the next supported action. It pulls reusable values from existing records, calculates system timestamps through the configured clock, validates typed input while prompting, and delegates every mutation to the existing service methods. During experiment approval it renders one consolidated authority envelope immediately before the final confirmation. The guided layer does not weaken schemas, approval validity, append-only storage, or rebuild behavior.
 
 ## Change workflow
 

@@ -8,7 +8,7 @@ import { GenesisError } from "../core/errors.mjs";
 import { normalizeBusinessId } from "../core/ids.mjs";
 import { createSchemaRegistry } from "../core/schema-registry.mjs";
 import { listRecords, readRecord, writeRecords } from "../storage/yaml-record-store.mjs";
-import { openProjection, projectRecord, projectionConsistency, readOpportunity, recordBlockedCommand, rebuildProjection } from "../storage/projection.mjs";
+import { openProjection, projectRecord, projectionConsistency, readOpportunities, readOpportunity, recordBlockedCommand, rebuildProjection } from "../storage/projection.mjs";
 import { withWorkspaceLock, workspacePaths } from "../storage/workspace.mjs";
 
 const DEFAULT_CONFIRM = async () => true;
@@ -241,6 +241,135 @@ function guidedApprovalTimes(clock, durationDays) {
     effective_at: issuedAt.toISOString(),
     expires_at: new Date(issuedAt.getTime() + durationMs).toISOString(),
     review_at: new Date(issuedAt.getTime() + (durationMs / 2)).toISOString(),
+  };
+}
+
+function reviewTiming({ decision, approval, state, action, now }) {
+  if (state === "closed") {
+    return { review_type: null, review_due_at: null, review_status: "none" };
+  }
+
+  const candidates = [];
+  if (["review_experiment", "decide_experiment"].includes(action)) {
+    candidates.push({ type: "human_authority_review", dueAt: now });
+  }
+  if (state === "discover" && decision?.review_date) {
+    candidates.push({ type: "decision_review", dueAt: decision.review_date });
+  }
+  if (approval?.review_at && !["approval_denied", "approval_revoked"].includes(state)) {
+    candidates.push({ type: "approval_review", dueAt: approval.review_at });
+  }
+  if (decision?.learning_lab?.monthly_review) {
+    candidates.push({ type: "learning_lab_monthly_review", dueAt: decision.learning_lab.monthly_review });
+  }
+  if (decision?.learning_lab?.expiry) {
+    candidates.push({ type: "learning_lab_expiry", dueAt: decision.learning_lab.expiry });
+  }
+
+  const valid = candidates
+    .map((candidate) => ({ ...candidate, timestamp: Date.parse(candidate.dueAt) }))
+    .filter((candidate) => Number.isFinite(candidate.timestamp))
+    .sort((left, right) => left.timestamp - right.timestamp);
+  const next = valid[0];
+  if (!next) {
+    return { review_type: null, review_due_at: null, review_status: "none" };
+  }
+  return {
+    review_type: next.type,
+    review_due_at: next.dueAt,
+    review_status: next.timestamp < Date.parse(now) ? "overdue" : (next.timestamp === Date.parse(now) ? "due" : "upcoming"),
+  };
+}
+
+function listBlocker(guidance) {
+  if (guidance.blocker) return guidance.blocker;
+  if (guidance.action === "review_experiment" && !guidance.approval) {
+    return {
+      code: "APPROVAL_REVIEW_REQUIRED",
+      path: "/approval",
+      correction: "Human Authority must review the experiment envelope",
+      escalation: "human_authority",
+    };
+  }
+  return null;
+}
+
+function nextCommandForGuidance(guidance) {
+  const commands = {
+    resolve_discover_blocker: "add-evidence",
+    plan_experiment: "plan-experiment",
+    review_experiment: "review-experiment",
+    start_experiment: "start-experiment",
+    record_execution: "record-execution",
+    record_measurement: "record-measurement",
+    record_reflection: "record-reflection",
+    decide_experiment: "decide-experiment",
+    close_experiment: "close-experiment",
+    start_follow_up: "start-follow-up",
+    start_learning_lab: "start-learning-lab",
+  };
+  return commands[guidance.action] ?? guidance.status.next_command ?? "status";
+}
+
+function listOpportunities({ projectRoot, clock }) {
+  const paths = workspacePaths(projectRoot);
+  if (!fs.existsSync(paths.db)) {
+    throw new GenesisError("PROJECTION_STALE", "SQLite projection is unavailable", {
+      path: "/projection",
+      correction: "Run genesis rebuild-index before using genesis list",
+      escalation: "operator",
+    });
+  }
+
+  const descriptors = listRecords(projectRoot);
+  const db = openProjection(paths.db);
+  let rows;
+  try {
+    const consistency = projectionConsistency(db, descriptors);
+    if (!consistency.consistent) {
+      throw new GenesisError("PROJECTION_STALE", "Canonical records and SQLite projection differ", {
+        path: "/projection",
+        correction: "Run genesis rebuild-index before using genesis list",
+        escalation: "operator",
+      });
+    }
+    rows = readOpportunities(db);
+  } finally {
+    db.close();
+  }
+
+  const now = clock().toISOString();
+  return {
+    generated_at: now,
+    projection_consistent: true,
+    count: rows.length,
+    opportunities: rows.map((row) => {
+      const guidance = guidedNextStep({ projectRoot, businessId: row.business_id, clock });
+      const timing = reviewTiming({
+        decision: guidance.decision,
+        approval: guidance.approval,
+        state: guidance.state,
+        action: guidance.action,
+        now,
+      });
+      const blocker = listBlocker(guidance);
+      return {
+        business_id: row.business_id,
+        state: guidance.state,
+        projected_state: row.state,
+        confidence: row.confidence,
+        updated_at: row.updated_at,
+        guided_action: guidance.action,
+        next_command: nextCommandForGuidance(guidance),
+        ...timing,
+        blocker: blocker ? {
+          code: blocker.code ?? "REQUIREMENT_MISSING",
+          path: blocker.path,
+          correction: blocker.correction,
+          escalation: blocker.escalation,
+        } : null,
+      };
+    }),
   };
 }
 
@@ -1854,6 +1983,13 @@ export function createGenesisService({
       return withWorkspaceLock(projectRoot, async () => guidedNextStep({
         projectRoot,
         businessId,
+        clock,
+      }));
+    },
+
+    async list() {
+      return withWorkspaceLock(projectRoot, async () => listOpportunities({
+        projectRoot,
         clock,
       }));
     },

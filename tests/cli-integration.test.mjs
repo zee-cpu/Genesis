@@ -181,6 +181,16 @@ test("CLI runs start-business, add-evidence, status, plan-experiment, and rebuil
     });
     assert.equal(planExit, 0);
 
+    const listExit = await runCli(["list"], {
+      projectRoot,
+      repoRoot: ROOT,
+      clock: CLOCK,
+      prompter: scriptedPrompter,
+      output,
+      errorOutput: output,
+    });
+    assert.equal(listExit, 0);
+
     fs.rmSync(workspacePaths(projectRoot).db, { force: true });
 
     const rebuildExit = await runCli(["rebuild-index"], {
@@ -216,6 +226,9 @@ test("CLI runs start-business, add-evidence, status, plan-experiment, and rebuil
     assert.equal(text.includes("Evidence count: 2"), true);
     assert.equal(text.includes("Blocked commands: none"), true);
     assert.equal(text.includes("Projection consistent: yes"), true);
+    assert.equal(text.includes("Opportunities: 1"), true);
+    assert.equal(text.includes("Next: genesis next bakery (review-experiment)"), true);
+    assert.equal(text.includes("Blocker: APPROVAL_REVIEW_REQUIRED"), true);
     assert.equal(text.includes("Records rebuilt: 5"), true);
     assert.equal(text.includes("Businesses rebuilt: 1"), true);
     assert.equal(text.includes("Decision versions: 2"), true);

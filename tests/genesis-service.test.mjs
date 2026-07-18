@@ -234,6 +234,45 @@ await runSection("startBusiness", async () => {
   }
 });
 
+await runSection("listOpportunities", async () => {
+  const projectRoot = makeProjectRoot();
+  try {
+    const service = createService(projectRoot);
+    await assert.rejects(
+      () => service.list(),
+      (error) => error.code === "PROJECTION_STALE" && error.path === "/projection",
+    );
+
+    const rebuilt = await service.rebuildIndex();
+    assert.equal(rebuilt.businessCount, 0);
+    const empty = await service.list();
+    assert.equal(empty.count, 0);
+    assert.deepEqual(empty.opportunities, []);
+
+    await service.startBusiness(startBusinessInput());
+    const discovery = await service.list();
+    assert.equal(discovery.count, 1);
+    assert.equal(discovery.projection_consistent, true);
+    assert.equal(discovery.opportunities[0].business_id, "bakery");
+    assert.equal(discovery.opportunities[0].state, "discover");
+    assert.equal(discovery.opportunities[0].projected_state, "discover");
+    assert.equal(discovery.opportunities[0].next_command, "plan-experiment");
+    assert.equal(discovery.opportunities[0].review_due_at, "2026-07-24T12:00:00Z");
+    assert.equal(discovery.opportunities[0].review_status, "upcoming");
+    assert.equal(discovery.opportunities[0].blocker, null);
+
+    await service.planExperiment("bakery", experimentInput());
+    const pending = await service.list();
+    assert.equal(pending.opportunities[0].state, "approval_pending");
+    assert.equal(pending.opportunities[0].next_command, "review-experiment");
+    assert.equal(pending.opportunities[0].review_type, "human_authority_review");
+    assert.equal(pending.opportunities[0].review_status, "due");
+    assert.equal(pending.opportunities[0].blocker.code, "APPROVAL_REVIEW_REQUIRED");
+  } finally {
+    cleanupProjectRoot(projectRoot);
+  }
+});
+
 await runSection("guidedNextUsesProjectionAndLifecycleState", async () => {
   const projectRoot = makeProjectRoot();
   try {
