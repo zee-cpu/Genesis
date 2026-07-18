@@ -2,20 +2,24 @@
 
 <div align="center">
 
-**A local-first, human-governed engine for turning business opportunities into approved, bounded experiments.**
+**A local-first, human-governed operating engine for turning opportunities into bounded experiments, reviewed evidence, and explicit business decisions.**
 
 [![Node.js 22+](https://img.shields.io/badge/Node.js-22%2B-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![Validation](https://img.shields.io/badge/policy-validated-2563eb)](./scripts/validate-genesis.mjs)
 [![Storage](https://img.shields.io/badge/storage-YAML%20%2B%20SQLite-7c3aed)](#how-data-is-stored)
 [![Network](https://img.shields.io/badge/runtime-offline-0f766e)](./tests/no-network.test.mjs)
 [![Authority](https://img.shields.io/badge/authority-human--governed-b45309)](./Genesis.md)
+[![Version](https://img.shields.io/badge/version-2.0.0-111827)](./CHANGELOG.md)
+[![License](https://img.shields.io/badge/license-Apache--2.0-d97706)](./LICENSE)
 
 </div>
 
-> Genesis helps you define an opportunity, preserve evidence and counterevidence, preregister a bounded validation experiment, obtain an explicit Human Authority decision, and manually move an approved experiment into the active state. Every write is shown as a proposal and requires explicit confirmation.
+> Genesis guides one complete governed validation lifecycle: opportunity, evidence, preregistration, Human Authority review, manual activation, execution evidence, measurement, reflection, outcome decision, closure, and separately governed continuation. Every write is shown as a proposal and requires explicit confirmation.
 
 Policy-Version: 2.0.0<br>
 Authority: Explanatory
+
+**Current release status:** Version 2.0.0 is validated, Apache-2.0 licensed, and available as a verified local npm tarball. Public npm publication has not been authorized or performed.
 
 ## Table of contents
 
@@ -35,10 +39,11 @@ Authority: Explanatory
 - [Development and verification](#development-and-verification)
 - [Current limitations](#current-limitations)
 - [Project status and next steps](#project-status-and-next-steps)
+- [License](#license)
 
 ## What Genesis does
 
-Genesis 2.0 currently provides a working interactive command-line workflow for **Discover → experiment planning → Human Authority review → manual start → execution evidence → measurement → reflection → outcome decision → closure**.
+Genesis 2.0 provides a working guided command-line workflow for **Discover → experiment planning → Human Authority review → manual start → execution evidence → measurement → reflection → outcome decision → closure → governed continuation**.
 
 It can:
 
@@ -60,6 +65,11 @@ It can:
 - require Human Authority approval for one exact Major Bet outcome decision, backed by evidence, constitution, and CEO reviews;
 - close the experiment, business decision, and reviewed experience together after revalidating the exact outcome approval;
 - create a fresh Discover workflow after an eligible closed `pivot` or `scale`, linked to the reviewed experience but carrying forward no authority or limits;
+- create a separately budgeted Learning Lab after a real failed initiative classified `learning_lab`;
+- show every opportunity, its next action, review timing, and first blocker through `genesis list`;
+- search immutable evidence and reviewed experiences using literal keywords and bounded field filters;
+- accept JSON proposal input and emit machine-readable JSON for read-only operator commands;
+- correct discovery mistakes and revise draft experiments through append-only superseding versions;
 - revoke an approval and supersede an active experiment without deleting history;
 - maintain a fast local SQLite projection; and
 - rebuild that projection entirely from canonical YAML records.
@@ -119,8 +129,10 @@ The current user journey is:
 stateDiagram-v2
     [*] --> Discover: genesis start-business
     Discover --> Discover: genesis add-evidence
+    Discover --> Discover: genesis correct-decision
     Discover --> ExperimentPlan: discover gate passes
     ExperimentPlan --> ApprovalPending: genesis plan-experiment
+    ApprovalPending --> ApprovalPending: genesis revise-experiment
     ApprovalPending --> Approved: genesis approve-experiment
     ApprovalPending --> Denied: genesis deny-experiment
     Approved --> Active: genesis start-experiment
@@ -129,6 +141,7 @@ stateDiagram-v2
     Reflection --> Decision: genesis record-reflection
     Decision --> OutcomeApproved: genesis decide-experiment
     OutcomeApproved --> Closed: genesis close-experiment
+    Closed --> Discover: genesis start-follow-up / start-learning-lab
     Approved --> Revoked: genesis revoke-approval
     Active --> Superseded: genesis revoke-approval
     note right of Active
@@ -170,6 +183,7 @@ node bin/genesis.mjs --version
 For an existing opportunity, the guided operator path is:
 
 ```bash
+genesis list
 genesis next <business-id>
 ```
 
@@ -722,7 +736,7 @@ Do not change Markdown in an attempt to override policy.
 
 ## Current limitations
 
-Genesis 2.0 is a practical foundation and a working discovery CLI, but it is not yet the complete business engine described by its policy model.
+Genesis 2.0 is a complete governed validation CLI and a practical foundation for a broader business operating engine. It deliberately stops before autonomous execution and production operations.
 
 Current technical boundaries include:
 
@@ -747,7 +761,7 @@ Treat the broader policies as the target governance contract and the current CLI
 The current engine is ready for local, controlled use across one complete governed validation lifecycle: opportunity, evidence, preregistration, approval, activation, execution evidence, measurement, reflection, Major Bet outcome decision, experience preservation, and closure. The most valuable next product increments are:
 
 1. **Customer-reality integrations:** import approved evidence without granting retrieved content authority.
-2. **Public release authorization:** choose a license and authorize the exact package, registry, version, actor, and publication window before enabling npm publication.
+2. **Public release authorization:** authorize the exact package, registry, version, actor, and publication window before enabling npm publication.
 3. **Identity and access (deferred):** authenticate operators and bind Human Authority actions to verifiable identities before any hosted or multi-user use.
 4. **Web control interface (paused):** expose the same backend gates through a local UI only when the operator workflow is mature enough to justify it.
 
