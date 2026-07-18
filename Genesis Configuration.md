@@ -3,7 +3,7 @@
 Policy-Version: 2.0.0
 Authority: Explanatory
 
-This is a non-normative operator guide. [genesis.yaml](genesis.yaml) is the normative manifest, and its referenced YAML is normative policy. YAML wins over Markdown whenever valid sources differ. Stop and escalate if normative sources are missing, invalid, contradictory, ambiguous, expired, or revoked.
+This is a non-normative CLI runtime guide. [genesis.yaml](genesis.yaml) is the normative manifest, and its referenced YAML is normative policy. YAML wins over Markdown whenever valid sources differ. Stop and escalate if normative sources are missing, invalid, contradictory, ambiguous, expired, or revoked.
 
 ## Repository map
 

@@ -11,23 +11,23 @@ preregistration_required_fields:
   - counterevidence
   - baseline
   - comparison_method
-  - metric_formula
-  - metric_population
-  - metric_denominator
-  - metric_data_source
+  - metric.formula
+  - metric.population
+  - metric.denominator
+  - metric.data_source
   - expected_outcome
   - minimum_meaningful_effect
   - failure_conditions
   - stop_conditions
-  - maximum_cash
-  - maximum_labor
-  - maximum_duration
-  - maximum_data
-  - maximum_risk
+  - limits.cash_usd
+  - limits.labor_hours
+  - limits.duration_days
+  - limits.data_classes
+  - limits.risk_level
   - owner
   - decision_date
   - allowed_outcomes
-closure_required_fields: [actual_cost, outcome, reflection, confidence_update, decision_outcome, linked_experience_record]
+closure_required_fields: [actual_cost, outcome, reflection, confidence_update, decision_outcome, experience_reference]
 states:
   - id: draft
     accountable_role: ceo
@@ -112,7 +112,7 @@ states:
     required_inputs: [experiment_record, decision_record, experience_record]
     allowed_actions: [close_and_preserve_records]
     exit_criteria: [closure_fields_complete]
-    required_evidence: [actual_cost, outcome, reflection, confidence_update, decision_outcome, linked_experience_record]
+    required_evidence: [actual_cost, outcome, reflection, confidence_update, decision_outcome, experience_reference]
     approval_class: routine
     output_record: experience_record
     review_deadline_days: 7

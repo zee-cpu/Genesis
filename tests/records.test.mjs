@@ -133,6 +133,112 @@ test("approval scope and actor match exactly", () => {
   );
 });
 
+test("only active canonical approval records validate", () => {
+  const validContext = {
+    now: "2026-07-18T00:00:00Z",
+    action: "production_deployment",
+    actor: "builder-agent",
+  };
+
+  for (const status of ["draft", "closed", "superseded"]) {
+    const record = loadTemplate("approval_record");
+    record.status = status;
+    assert.equal(
+      validator.validateApproval(record, validContext).some((issue) => (
+        issue.code === "APPROVAL_STATUS_INVALID" && issue.path === "/status"
+      )),
+      true,
+      status,
+    );
+  }
+
+  const statusless = loadTemplate("approval_record");
+  delete statusless.status;
+  assert.equal(
+    validator.validateApproval(statusless, validContext).some((issue) => (
+      issue.code === "APPROVAL_STATUS_INVALID" && issue.path === "/status"
+    )),
+    true,
+  );
+
+  const noncanonical = loadTemplate("approval_record");
+  noncanonical.record_type = "decision_record";
+  assert.equal(
+    validator.validateApproval(noncanonical, validContext).some((issue) => (
+      issue.code === "APPROVAL_RECORD_INVALID" && issue.path === "/record_type"
+    )),
+    true,
+  );
+});
+
+test("approval limits cannot exceed the canonical envelope", () => {
+  assert.equal(typeof validator.validateApproval, "function");
+  const record = loadTemplate("approval_record");
+  const validContext = {
+    now: "2026-07-18T00:00:00Z",
+    action: "production_deployment",
+    actor: "builder-agent",
+  };
+  const mismatches = [
+    { cash_usd: record.limits.cash_usd + 1 },
+    { labor_hours: record.limits.labor_hours + 1 },
+    { duration_days: record.limits.duration_days + 1 },
+    { data_classes: [...record.limits.data_classes, "public"] },
+    { data_classes: ["unknown"] },
+    { risk_level: "critical" },
+  ];
+
+  for (const limits of mismatches) {
+    assert.equal(
+      validator.validateApproval(record, { ...validContext, limits })
+        .some((issue) => issue.code === "APPROVAL_LIMIT_MISMATCH"),
+      true,
+      JSON.stringify(limits),
+    );
+  }
+
+  const unknownApprovedClass = loadTemplate("approval_record");
+  unknownApprovedClass.limits.data_classes = ["unknown"];
+  assert.equal(
+    validator.validateApproval(unknownApprovedClass, validContext)
+      .some((issue) => issue.code === "APPROVAL_LIMIT_MISMATCH"),
+    true,
+  );
+});
+
+test("approval and experiment limit data classes use the privacy enum", () => {
+  for (const recordId of ["approval_record", "experiment_record"]) {
+    const record = loadTemplate(recordId);
+    record.limits.data_classes = ["unknown"];
+    const validate = compileSchema(recordId);
+    assert.equal(validate(record), false, recordId);
+  }
+});
+
+test("draft experiment requires preregistration but not closure fields", async () => {
+  const draft = loadTemplate("experiment_record");
+  draft.status = "draft";
+  draft.approval_references = [];
+  for (const field of ["actual_cost", "results", "reflection", "outcome", "experience_reference", "confidence_update", "decision_outcome"]) {
+    delete draft[field];
+  }
+  assert.equal(compileSchema("experiment_record")(draft), true);
+});
+
+test("closed validation experiment requires closure and validation outcome", async () => {
+  const closed = loadTemplate("experiment_record");
+  delete closed.validation_outcome;
+  assert.equal(compileSchema("experiment_record")(closed), false);
+  closed.validation_outcome = "passed";
+  assert.equal(compileSchema("experiment_record")(closed), true);
+});
+
+test("decision record carries the target customer", async () => {
+  const decision = loadTemplate("decision_record");
+  delete decision.target_customer;
+  assert.equal(compileSchema("decision_record")(decision), false);
+});
+
 test("record references use declared record identifiers", async () => {
   const policySet = await validator.loadPolicySet(ROOT);
   const record = policySet.templates.get("decision_record");

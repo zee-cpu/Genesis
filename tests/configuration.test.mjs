@@ -104,6 +104,7 @@ test("Constitution places Human Authority above CEO and links normative policy",
 test("configuration guide identifies genesis.yaml and YAML precedence", async () => {
   const policySet = await loadPolicySet(ROOT);
   const guide = policySet.documents.get("configuration_guide");
+  assert.match(guide, /CLI runtime guide/);
   assert.match(guide, /\[genesis\.yaml\]\(genesis\.yaml\)/);
   assert.match(guide, /YAML wins over Markdown/i);
   assert.match(guide, /non-normative/i);
@@ -181,4 +182,34 @@ test("GitHub Actions runs the locked Genesis validation gate", async () => {
   for (const command of ["npm ci", "npm run validate", "npm test"]) {
     assert.match(workflow, new RegExp(`- run: ${command.replaceAll(" ", "\\s")}`));
   }
+});
+
+test("README documents the offline CLI, files, recovery, and limits", async () => {
+  const readme = await readFile(path.join(ROOT, "README.md"), "utf8");
+  for (const command of [
+    "genesis start-business",
+    "genesis add-evidence <business-id>",
+    "genesis status <business-id>",
+    "genesis plan-experiment <business-id>",
+    "genesis rebuild-index",
+  ]) {
+    assert.match(readme, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+
+  assert.match(readme, /\.genesis\//);
+  assert.match(readme, /approval_pending/);
+  assert.match(readme, /YAML/i);
+  assert.match(readme, /SQLite/i);
+  assert.match(readme, /rebuild-index/);
+  assert.match(readme, /npm ci/);
+  assert.match(readme, /npm start/);
+  assert.match(readme, /node bin\/genesis\.mjs/);
+  assert.match(readme, /npm link/);
+  assert.match(readme, /The CLI stops at `approval_pending`/);
+  assert.match(readme, /does not automatically research, contact customers, execute experiments, build products, deploy software, bill customers, or operate a business/i);
+});
+
+test("package.json exposes a direct start command", async () => {
+  const packageJson = JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf8"));
+  assert.equal(packageJson.scripts.start, "node bin/genesis.mjs");
 });

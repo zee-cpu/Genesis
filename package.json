@@ -6,14 +6,19 @@
   "engines": {
     "node": ">=22"
   },
+  "bin": {
+    "genesis": "./bin/genesis.mjs"
+  },
   "scripts": {
+    "start": "node bin/genesis.mjs",
     "validate": "node scripts/validate-genesis.mjs",
     "test": "node --test tests/*.test.mjs",
     "check": "npm run validate && npm test"
   },
-  "devDependencies": {
+  "dependencies": {
     "ajv": "8.18.0",
     "ajv-formats": "3.0.1",
+    "better-sqlite3": "12.11.1",
     "yaml": "2.8.3"
   }
 }

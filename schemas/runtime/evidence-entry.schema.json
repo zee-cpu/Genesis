@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genesis.local/schemas/runtime/evidence-entry.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "business_id",
+    "collected_at",
+    "source_reference",
+    "summary",
+    "stance",
+    "provenance",
+    "privacy_classification"
+  ],
+  "properties": {
+    "id": { "$ref": "#/$defs/id" },
+    "business_id": { "$ref": "#/$defs/id" },
+    "collected_at": { "type": "string", "format": "date-time" },
+    "source_reference": { "$ref": "#/$defs/nonempty" },
+    "summary": { "$ref": "#/$defs/nonempty" },
+    "stance": { "enum": ["support", "contradict"] },
+    "provenance": { "$ref": "#/$defs/nonempty" },
+    "privacy_classification": {
+      "enum": ["public", "internal", "confidential", "restricted"]
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "nonempty": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

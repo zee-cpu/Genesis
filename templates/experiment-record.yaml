@@ -7,6 +7,8 @@ updated_at: 2026-07-24T10:00:00Z
 owner: research
 affected_business: example-business
 status: closed
+subtype: validation
+validation_outcome: passed
 evidence_references: [evidence://example/experiment-results]
 related_records: [example-decision-001, example-experience-001]
 privacy_classification: internal
@@ -45,3 +47,5 @@ results: Three of five qualified participants completed the task unaided.
 reflection: The threshold passed narrowly; counterevidence remains material.
 outcome: pivot
 experience_reference: example-experience-001
+confidence_update: 0.60
+decision_outcome: pivot
