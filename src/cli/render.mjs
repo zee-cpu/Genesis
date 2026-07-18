@@ -47,6 +47,7 @@ export function renderStatus(status) {
     `Next command: ${status.next_command ?? status.next_permitted_command ?? "status"}`,
     `Decision versions: ${status.decision_versions}`,
     `Experiment versions: ${status.experiment_versions}`,
+    `Experience versions: ${status.experience_versions ?? 0}`,
     `Approval versions: ${status.approval_versions ?? 0}`,
     `Evidence count: ${status.evidence_count}`,
     `Supporting evidence: ${status.metrics?.supporting_evidence_count ?? 0}`,
@@ -121,6 +122,28 @@ export function renderGuidedApprovalProposal(proposal) {
     `Review: ${approval.review_at}`,
     `Expires: ${approval.expires_at}`,
     `Rationale: ${approval.rationale}`,
+  ].join("\n");
+}
+
+export function renderOutcomeDecisionProposal(proposal) {
+  const approval = proposal.record;
+  const decision = proposal.records.find((item) => item.record?.record_type === "decision_record")?.record;
+  return [
+    "Human Authority Major Bet decision envelope",
+    `Business: ${proposal.business_id}`,
+    `Outcome: ${decision?.decision ?? "not recorded"}`,
+    `Action: ${approval.scope.actions.join(", ")}`,
+    `Closure actor: ${approval.actor}`,
+    `Decision class: ${approval.action_class}`,
+    `Evidence snapshot: ${renderList(approval.evidence_snapshot)}`,
+    `Constitution review: ${decision?.constitution_review ?? "not recorded"}`,
+    `Evidence review: ${decision?.evidence_review ?? "not recorded"}`,
+    `CEO recommendation: ${decision?.ceo_recommendation ?? "not recorded"}`,
+    `Rationale: ${approval.rationale}`,
+    `Effective: ${approval.effective_at}`,
+    `Review: ${approval.review_at}`,
+    `Expires: ${approval.expires_at}`,
+    "This approval authorizes only classification and closure of the recorded outcome; it does not authorize executing scale, pivot, deployment, spending, or external communication.",
   ].join("\n");
 }
 

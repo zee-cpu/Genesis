@@ -38,7 +38,7 @@ Authority: Explanatory
 
 ## What Genesis does
 
-Genesis 2.0 currently provides a working interactive command-line workflow for **Discover → experiment planning → Human Authority review → manual start → execution evidence → measurement**.
+Genesis 2.0 currently provides a working interactive command-line workflow for **Discover → experiment planning → Human Authority review → manual start → execution evidence → measurement → reflection → outcome decision → closure**.
 
 It can:
 
@@ -56,6 +56,9 @@ It can:
 - record completed or stopped execution as a new immutable experiment version, including deviations and actual exposure;
 - reject execution evidence outside the approved actor, time, cash, labor, duration, data, or risk envelope;
 - record measurement separately with an analyst reviewer, source references, baseline comparison, and data-quality limitations;
+- create a reviewed experience with reflection, a reusable lesson, a validity window, and an explicit confidence update;
+- require Human Authority approval for one exact Major Bet outcome decision, backed by evidence, constitution, and CEO reviews;
+- close the experiment, business decision, and reviewed experience together after revalidating the exact outcome approval;
 - revoke an approval and supersede an active experiment without deleting history;
 - maintain a fast local SQLite projection; and
 - rebuild that projection entirely from canonical YAML records.
@@ -80,11 +83,11 @@ It also does not currently provide:
 - autonomous agents or external API calls;
 - automatic approval, authority inference, or automatic workflow progression;
 - automatic experiment task execution after the manual `active` transition;
-- reflection, closure, or outcome selection commands;
+- automatic reflection, outcome selection, or closure;
 - customer relationship management, outreach, deployment, billing, or production operations; or
 - multi-user synchronization or a hosted database.
 
-The policy layer describes a broader governed business lifecycle. The implemented CLI deliberately records the governed path through manual experiment activation, operator-supplied execution evidence, and analyst measurement. It does not perform the experiment work itself.
+The policy layer describes a broader governed business lifecycle. The implemented CLI records one complete governed validation path through closure while keeping the underlying experiment work and any follow-on outcome execution outside the engine.
 
 ## How the engine works
 
@@ -122,6 +125,9 @@ stateDiagram-v2
     Approved --> Active: genesis start-experiment
     Active --> Measurement: genesis record-execution
     Measurement --> Reflection: genesis record-measurement
+    Reflection --> Decision: genesis record-reflection
+    Decision --> OutcomeApproved: genesis decide-experiment
+    OutcomeApproved --> Closed: genesis close-experiment
     Approved --> Revoked: genesis revoke-approval
     Active --> Superseded: genesis revoke-approval
     note right of Active
@@ -373,6 +379,9 @@ This validates every canonical YAML record and replaces the SQLite projection wi
 | `genesis start-experiment <business-id>` | Revalidate approval and manually mark the experiment active | Yes, after confirmation | `active` |
 | `genesis record-execution <business-id>` | Preserve execution evidence and actual exposure inside the approved envelope | Yes, after confirmation | `measurement` |
 | `genesis record-measurement <business-id>` | Preserve the observed result, comparison, sources, and data quality | Yes, after confirmation | `reflection` |
+| `genesis record-reflection <business-id>` | Create a reviewed experience, reusable lesson, and confidence update | Yes, after confirmation | `decision` |
+| `genesis decide-experiment <business-id>` | Record Human Authority approval for one exact Major Bet outcome | Yes, after confirmation | `outcome_approved` |
+| `genesis close-experiment <business-id>` | Revalidate outcome approval and close linked experiment, decision, and experience records | Yes, after confirmation | `closed` |
 | `genesis revoke-approval <business-id>` | Revoke approval and supersede an active experiment | Yes, after confirmation | `approval_revoked` or `superseded` |
 | `genesis rebuild-index` | Validate YAML and rebuild SQLite from scratch | Replaces derived index only | Unchanged |
 | `genesis --help` | Print command usage | No | Unchanged |
@@ -398,6 +407,8 @@ Genesis creates this structure in the directory where you run it:
 │   │   └── <evidence-id>.v0001.yaml
 │   ├── experiments/
 │   │   └── <experiment-id>.v0001.yaml
+│   ├── experiences/
+│   │   └── <experience-id>.v0001.yaml
 │   └── approvals/
 │       └── <approval-id>.v0001.yaml
 ├── .transactions/        # transient crash-recovery journals, normally empty
@@ -684,7 +695,7 @@ Current technical boundaries include:
 - operator identities are locally entered and type-checked, so filesystem access remains part of the trust boundary;
 - the `active` transition records authorization state but does not run experiment tasks;
 - execution and measurement are operator-entered evidence; Genesis does not infer or fabricate results;
-- no transition from `reflection` to outcome decision or closure;
+- an approved `scale`, `pivot`, or other outcome is a classification decision only; it grants no permission to execute follow-on work;
 - no automatic metric ingestion from customer or operating systems;
 - no authentication, encryption layer, remote backup, or sync;
 - no packaged npm release—the supported installation path is this repository plus `npm link`; and
@@ -694,11 +705,11 @@ Treat the broader policies as the target governance contract and the current CLI
 
 ## Project status and next steps
 
-The current engine is ready for local, controlled use to register opportunities, collect evidence, preregister experiments, record explicit Human Authority decisions, activate an exactly approved plan, and preserve manual execution and measurement evidence. The most valuable next product increments are:
+The current engine is ready for local, controlled use across one complete governed validation lifecycle: opportunity, evidence, preregistration, approval, activation, execution evidence, measurement, reflection, Major Bet outcome decision, experience preservation, and closure. The most valuable next product increments are:
 
 1. **Web control interface:** expose opportunity status, evidence, experiment review, approval/denial, manual start, and revocation through a clean local UI while preserving the same backend gates.
 2. **Identity and access:** authenticate operators and bind Human Authority actions to verifiable identities before any hosted or multi-user use.
-3. **Experiment closure loop:** add reflection, confidence update, outcome decision, experience creation, and closure commands; automate execution only after the manual workflow is understood and eligible.
+3. **Portfolio continuation:** turn an approved `pivot`, `scale`, or `learning_lab` classification into a separately proposed and approved next opportunity or experiment without inheriting authority from the closed experiment.
 4. **Operator experience:** add opportunity listing, non-interactive structured input/output, broader correction workflows, and search on top of the guided `next` command.
 5. **Customer-reality integrations:** import approved evidence without granting retrieved content authority.
 6. **Packaging and release:** publish a versioned distribution with migration and compatibility guarantees.

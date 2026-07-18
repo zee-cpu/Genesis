@@ -4,8 +4,11 @@ import test from "node:test";
 import {
   actionClassForLimits,
   evaluateExperimentApproval,
+  evaluateOutcomeApproval,
   experimentApprovalAction,
+  outcomeApprovalAction,
   requireExperimentApproval,
+  requireOutcomeApproval,
 } from "../src/core/approval-workflow.mjs";
 
 function experiment(overrides = {}) {
@@ -94,4 +97,39 @@ test("action classification follows the experiment risk envelope", () => {
   assert.equal(actionClassForLimits({ ...experiment().limits, cash_usd: 5001 }), "major_bet");
   assert.equal(actionClassForLimits({ ...experiment().limits, duration_days: 31 }), "major_bet");
   assert.equal(actionClassForLimits({ ...experiment().limits, risk_level: "high" }), "protected_action");
+});
+
+test("Major Bet outcome approval covers exact closure records, actor, and outcome", () => {
+  const experimentRecord = { id: "bakery-experiment" };
+  const experience = { id: "bakery-experience-001" };
+  const decision = { id: "bakery-decision" };
+  const outcomeApproval = approval({
+    requester: "ceo",
+    actor: "analyst",
+    action_class: "major_bet",
+    scope: { actions: [outcomeApprovalAction(experimentRecord.id, "pivot")], wildcard: false },
+    related_records: [experimentRecord.id, experience.id, decision.id],
+  });
+  const input = {
+    approval: outcomeApproval,
+    experiment: experimentRecord,
+    experience,
+    decision,
+    actor: "analyst",
+    outcome: "pivot",
+    now: "2026-07-19T00:00:00Z",
+  };
+  assert.deepEqual(evaluateOutcomeApproval(input), { valid: true, blockers: [] });
+  assert.equal(requireOutcomeApproval(input).id, "bakery-experiment-approval");
+
+  assert.equal(evaluateOutcomeApproval({ ...input, outcome: "scale" }).blockers.some(
+    (item) => item.code === "APPROVAL_SCOPE_MISMATCH",
+  ), true);
+  assert.equal(evaluateOutcomeApproval({ ...input, actor: "builder" }).blockers.some(
+    (item) => item.code === "APPROVAL_ACTOR_MISMATCH",
+  ), true);
+  assert.equal(evaluateOutcomeApproval({
+    ...input,
+    approval: { ...outcomeApproval, related_records: [experimentRecord.id] },
+  }).blockers.some((item) => item.code === "APPROVAL_RECORD_MISMATCH"), true);
 });

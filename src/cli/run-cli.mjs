@@ -5,7 +5,7 @@ import { createGenesisService } from "../application/genesis-service.mjs";
 import { suggestionsFor } from "../core/suggestions.mjs";
 import { GenesisError, formatError } from "../core/errors.mjs";
 import { createPrompter } from "./prompter.mjs";
-import { renderApprovalReview, renderCliError, renderGuidedApprovalProposal, renderNextGuidance, renderProposal, renderRebuildResult, renderStatus } from "./render.mjs";
+import { renderApprovalReview, renderCliError, renderGuidedApprovalProposal, renderNextGuidance, renderOutcomeDecisionProposal, renderProposal, renderRebuildResult, renderStatus } from "./render.mjs";
 
 const HELP = [
   "Usage:",
@@ -20,6 +20,9 @@ const HELP = [
   "  genesis start-experiment <business-id>",
   "  genesis record-execution <business-id>",
   "  genesis record-measurement <business-id>",
+  "  genesis record-reflection <business-id>",
+  "  genesis decide-experiment <business-id>",
+  "  genesis close-experiment <business-id>",
   "  genesis revoke-approval <business-id>",
   "  genesis rebuild-index",
 ].join("\n");
@@ -71,11 +74,11 @@ async function askRequired(prompter, question, fallback = "") {
   }
 }
 
-async function askGuidedNumber(prompter, question, { fallback = 0, integer = false, minimum = 0 } = {}) {
+async function askGuidedNumber(prompter, question, { fallback = 0, integer = false, minimum = 0, maximum = Number.POSITIVE_INFINITY } = {}) {
   while (true) {
     const answer = await prompter.ask(question);
     const value = answer.trim() ? Number(answer) : fallback;
-    if (Number.isFinite(value) && value >= minimum && (!integer || Number.isInteger(value))) {
+    if (Number.isFinite(value) && value >= minimum && value <= maximum && (!integer || Number.isInteger(value))) {
       return value;
     }
   }
@@ -331,6 +334,56 @@ async function gatherMeasurementInput(prompter, guidance) {
   };
 }
 
+async function gatherReflectionInput(prompter, guidance) {
+  const defaults = guidance.defaults ?? {};
+  return {
+    reviewer: defaults.reviewer ?? "analyst",
+    validation_outcome: await askGuidedChoice(
+      prompter,
+      "Did the experiment pass or fail its preregistered criteria? (passed or failed): ",
+      ["passed", "failed"],
+      undefined,
+    ),
+    domain: await askRequired(prompter, "Experience domain: "),
+    tags: await askGuidedList(prompter, "Experience tags (comma-separated): "),
+    context: await askRequired(prompter, "Material context for interpreting the result: "),
+    supporting_evidence: await askGuidedList(
+      prompter,
+      `Supporting evidence references [${(defaults.supporting_evidence ?? []).join(",")}]: `,
+      { fallback: defaults.supporting_evidence ?? [] },
+    ),
+    contradicting_evidence: parseCommaList(await prompter.ask(
+      `Additional contradicting evidence (already preserved: ${(defaults.contradicting_evidence ?? []).join(",")}; blank for none): `,
+    )),
+    reflection: await askRequired(prompter, "What did the result teach us? "),
+    reusable_lesson: await askRequired(prompter, "Reusable bounded lesson: "),
+    confidence_update: await askGuidedNumber(prompter, "Updated confidence (0-1): ", {
+      fallback: Number.NaN,
+      maximum: 1,
+    }),
+    valid_from: defaults.valid_from,
+    valid_until: await askRequired(prompter, `Lesson valid until [${defaults.valid_until}]: `, defaults.valid_until),
+    reuse_evidence: parseCommaList(await prompter.ask("Prior reuse evidence (comma-separated; blank for none): ")),
+  };
+}
+
+async function gatherOutcomeDecisionInput(prompter, guidance) {
+  const defaults = guidance.defaults ?? {};
+  return {
+    approver_principal_id: defaults.approver_principal_id ?? "genesis-owner",
+    actor: defaults.actor ?? "analyst",
+    outcome: await prompter.choose("Human Authority outcome decision:", defaults.allowed_outcomes),
+    rationale: await askRequired(prompter, "Outcome rationale: "),
+    constitution_review: await askRequired(prompter, "Constitution review conclusion: "),
+    evidence_review: await askRequired(prompter, "Evidence and counterevidence review conclusion: "),
+    ceo_recommendation: await askRequired(prompter, "CEO recommendation: "),
+    effective_at: defaults.effective_at,
+    expires_at: defaults.expires_at,
+    review_at: defaults.review_at,
+    guided: true,
+  };
+}
+
 function writeMutationResult(result, output, errorOutput) {
   if (!result.changed) {
     writeLine(output, "Cancelled.");
@@ -365,6 +418,10 @@ export async function runCli(argv, dependencies = {}) {
     if (proposal.guided && ["approve-experiment", "deny-experiment"].includes(proposal.command)) {
       writeLine(output, renderGuidedApprovalProposal(proposal));
       return prompter.confirm("Human Authority genesis-owner — save this decision? [y/N] ");
+    }
+    if (proposal.guided && proposal.command === "decide-experiment") {
+      writeLine(output, renderOutcomeDecisionProposal(proposal));
+      return prompter.confirm("Human Authority genesis-owner — approve this exact outcome? [y/N] ");
     }
     writeLine(output, renderProposal(proposal));
     return prompter.confirm("Save this immutable record? [y/N] ");
@@ -497,6 +554,32 @@ export async function runCli(argv, dependencies = {}) {
         return 0;
       }
 
+      if (guidance.action === "record_reflection") {
+        const result = await service.recordReflection(
+          businessId,
+          await gatherReflectionInput(prompter, guidance),
+        );
+        writeMutationResult(result, output, errorOutput);
+        return 0;
+      }
+
+      if (guidance.action === "decide_experiment") {
+        const result = await service.decideExperiment(
+          businessId,
+          await gatherOutcomeDecisionInput(prompter, guidance),
+        );
+        writeMutationResult(result, output, errorOutput);
+        return 0;
+      }
+
+      if (guidance.action === "close_experiment") {
+        const result = await service.closeExperiment(businessId, {
+          actor: guidance.defaults.actor,
+        });
+        writeMutationResult(result, output, errorOutput);
+        return 0;
+      }
+
       return 0;
     }
 
@@ -583,6 +666,25 @@ export async function runCli(argv, dependencies = {}) {
       const result = command === "record-execution"
         ? await service.recordExecution(businessId, await gatherExecutionInput(prompter, guidance))
         : await service.recordMeasurement(businessId, await gatherMeasurementInput(prompter, guidance));
+      writeMutationResult(result, output, errorOutput);
+      return 0;
+    }
+
+    if (["record-reflection", "decide-experiment", "close-experiment"].includes(command)) {
+      if (!businessId) {
+        usage(output);
+        return 2;
+      }
+      const guidance = await service.next(businessId);
+      writeLine(output, renderNextGuidance(guidance));
+      let result;
+      if (command === "record-reflection") {
+        result = await service.recordReflection(businessId, await gatherReflectionInput(prompter, guidance));
+      } else if (command === "decide-experiment") {
+        result = await service.decideExperiment(businessId, await gatherOutcomeDecisionInput(prompter, guidance));
+      } else {
+        result = await service.closeExperiment(businessId, { actor: guidance.defaults.actor });
+      }
       writeMutationResult(result, output, errorOutput);
       return 0;
     }

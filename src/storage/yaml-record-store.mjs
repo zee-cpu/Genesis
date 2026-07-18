@@ -12,6 +12,7 @@ const KIND_DIRECTORIES = new Map([
   ["approval", "approvals"],
   ["decision", "decisions"],
   ["experiment", "experiments"],
+  ["experience", "experiences"],
   ["evidence", "evidence"],
 ]);
 const DIRECTORY_KINDS = new Map(Array.from(KIND_DIRECTORIES, ([kind, directory]) => [directory, kind]));
@@ -23,7 +24,7 @@ function recordDirectoryForKind(paths, kind) {
   if (!directory) {
     throw new GenesisError("RECORD_KIND_INVALID", "Record kind is not supported", {
       path: "/kind",
-      correction: "Use approval, decision, experiment, or evidence",
+      correction: "Use approval, decision, experiment, experience, or evidence",
       escalation: "builder",
     });
   }

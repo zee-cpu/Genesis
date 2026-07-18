@@ -6,6 +6,10 @@ export function experimentApprovalAction(experimentId) {
   return `start_experiment:${experimentId}`;
 }
 
+export function outcomeApprovalAction(experimentId, outcome) {
+  return `close_experiment:${experimentId}:${outcome}`;
+}
+
 export function actionClassForLimits(limits) {
   if (["high", "critical"].includes(limits?.risk_level)) {
     return "protected_action";
@@ -86,6 +90,63 @@ export function evaluateExperimentApproval({ approval, experiment, actor, now })
 
 export function requireExperimentApproval(input) {
   const result = evaluateExperimentApproval(input);
+  if (!result.valid) {
+    const first = result.blockers[0];
+    throw new GenesisError(first.code, first.message, first);
+  }
+  return input.approval;
+}
+
+export function evaluateOutcomeApproval({ approval, experiment, experience, decision, actor, outcome, now }) {
+  const blockers = [];
+  if (!approval) {
+    return {
+      valid: false,
+      blockers: [blocker("APPROVAL_MISSING", "Outcome approval is missing", "/approval", "Record explicit Human Authority approval for the exact outcome")],
+    };
+  }
+  if (approval.revoked === true || approval.status === "revoked") {
+    blockers.push(blocker("APPROVAL_REVOKED", "Outcome approval is revoked", "/revoked", "Obtain a new explicit Human Authority approval"));
+  }
+  if (approval.status !== "active" || approval.decision !== "approved") {
+    blockers.push(blocker("APPROVAL_NOT_ACTIVE", "Outcome approval is not active and approved", "/status", "Use an active approved record"));
+  }
+  if (approval.approver_role !== "human_authority" || approval.approver_principal_id !== "genesis-owner") {
+    blockers.push(blocker("APPROVAL_APPROVER_INVALID", "Outcome was not approved by Genesis Human Authority", "/approver_principal_id", "Use genesis-owner as Human Authority"));
+  }
+  if (approval.requester === approval.approver_principal_id) {
+    blockers.push(blocker("SEPARATION_OF_DUTIES_REQUIRED", "Outcome requester and approver are not separated", "/requester", "Use a requester distinct from genesis-owner"));
+  }
+  const action = outcomeApprovalAction(experiment?.id, outcome);
+  if (approval.scope?.wildcard === true || !approval.scope?.actions?.includes(action)) {
+    blockers.push(blocker("APPROVAL_SCOPE_MISMATCH", "Approval does not authorize this exact experiment outcome", "/scope/actions", `Authorize exactly ${action}`));
+  }
+  for (const record of [experiment, experience, decision]) {
+    if (!record?.id || !approval.related_records?.includes(record.id)) {
+      blockers.push(blocker("APPROVAL_RECORD_MISMATCH", "Approval is not linked to every closure record", "/related_records", "Link the experiment, experience, and decision records"));
+      break;
+    }
+  }
+  if (approval.actor !== actor) {
+    blockers.push(blocker("APPROVAL_ACTOR_MISMATCH", "Approval actor does not match the closure actor", "/actor", `Use the approved actor ${approval.actor ?? "missing"}`));
+  }
+  if (approval.action_class !== "major_bet") {
+    blockers.push(blocker("APPROVAL_CLASS_MISMATCH", "Outcome decision is not approved as a Major Bet", "/action_class", "Use major_bet for the outcome decision"));
+  }
+  const currentTime = Date.parse(now);
+  const effectiveTime = Date.parse(approval.effective_at);
+  const expiryTime = Date.parse(approval.expires_at);
+  if (!Number.isFinite(currentTime) || !Number.isFinite(effectiveTime) || currentTime < effectiveTime) {
+    blockers.push(blocker("APPROVAL_NOT_EFFECTIVE", "Outcome approval is not yet effective", "/effective_at", "Wait until the approval is effective or issue a corrected record"));
+  }
+  if (!Number.isFinite(expiryTime) || !Number.isFinite(currentTime) || currentTime >= expiryTime) {
+    blockers.push(blocker("APPROVAL_EXPIRED", "Outcome approval has expired", "/expires_at", "Obtain a new unexpired approval"));
+  }
+  return { valid: blockers.length === 0, blockers };
+}
+
+export function requireOutcomeApproval(input) {
+  const result = evaluateOutcomeApproval(input);
   if (!result.valid) {
     const first = result.blockers[0];
     throw new GenesisError(first.code, first.message, first);

@@ -8,7 +8,7 @@
     "schema_version": { "$ref": "#/$defs/semver" }, "policy_version": { "const": "2.0.0" },
     "created_at": { "$ref": "#/$defs/dateTime" }, "updated_at": { "$ref": "#/$defs/dateTime" },
     "owner": { "$ref": "#/$defs/nonempty" }, "affected_business": { "$ref": "#/$defs/nonempty" },
-    "status": { "enum": ["draft", "active", "measurement", "reflection", "closed", "superseded"] },
+    "status": { "enum": ["draft", "active", "measurement", "reflection", "decision", "outcome_approved", "closed", "superseded"] },
     "subtype": { "enum": ["validation"] }, "validation_outcome": { "enum": ["pending", "passed", "failed"] },
     "evidence_references": { "$ref": "#/$defs/nonemptyRefs" }, "related_records": { "$ref": "#/$defs/recordRefs" },
     "privacy_classification": { "$ref": "#/$defs/privacy" }, "immutable_history_refs": { "$ref": "#/$defs/nonemptyRefs" },
@@ -66,11 +66,11 @@
   },
   "allOf": [
     {
-      "if": { "properties": { "status": { "enum": ["active", "measurement", "reflection", "closed"] } }, "required": ["status"] },
+      "if": { "properties": { "status": { "enum": ["active", "measurement", "reflection", "decision", "outcome_approved", "closed"] } }, "required": ["status"] },
       "then": { "properties": { "approval_references": { "$ref": "#/$defs/nonemptyRecordRefs" } } }
     },
     {
-      "if": { "properties": { "status": { "enum": ["measurement", "reflection", "closed"] } }, "required": ["status"] },
+      "if": { "properties": { "status": { "enum": ["measurement", "reflection", "decision", "outcome_approved", "closed"] } }, "required": ["status"] },
       "then": {
         "required": ["execution_log", "deviations", "completion_reason", "actual_exposure", "actual_cost"],
         "properties": {
@@ -83,7 +83,7 @@
       }
     },
     {
-      "if": { "properties": { "status": { "enum": ["reflection", "closed"] } }, "required": ["status"] },
+      "if": { "properties": { "status": { "enum": ["reflection", "decision", "outcome_approved", "closed"] } }, "required": ["status"] },
       "then": {
         "required": ["actual_result", "comparison", "data_quality", "measurement_reviewer", "measurement_evidence", "results"],
         "properties": {

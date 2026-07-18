@@ -8,9 +8,11 @@ import {
   buildApprovalRecord,
   buildDecisionRecord,
   buildEvidenceEntry,
+  buildExperienceRecord,
   buildExperimentRecord,
   versionApprovalRecord,
   versionDecisionRecord,
+  versionExperienceRecord,
   versionExperimentRecord,
 } from "../src/core/record-builders.mjs";
 import { createSchemaRegistry } from "../src/core/schema-registry.mjs";
@@ -268,4 +270,45 @@ test("approval and experiment versions remain canonical and immutable", () => {
     ),
     (error) => error.code === "SEPARATION_OF_DUTIES_REQUIRED",
   );
+});
+
+test("experience builders create and close an immutable reviewed lesson", () => {
+  const experience = buildExperienceRecord({
+    business_id: "bakery",
+    evidence_references: ["evidence://bakery/result"],
+    related_records: ["bakery-decision", "bakery-experiment"],
+    privacy_classification: "internal",
+    domain: "customer_validation",
+    tags: ["bakery", "reconciliation"],
+    context: "A bounded observed validation.",
+    hypothesis: "Reconciliation time will fall below one hour.",
+    decision: "run_bounded_validation",
+    action: "Observed the preregistered sessions.",
+    outcome: "Median time was 55 minutes.",
+    baseline: "Median time was 120 minutes.",
+    expected_result: "Median time below 60 minutes.",
+    metric_definition: "sum_minutes_divided_by_sessions",
+    actual_result: "Median time was 55 minutes.",
+    supporting_evidence: ["evidence://bakery/result"],
+    contradicting_evidence: [],
+    confidence: 0.7,
+    valid_from: "2026-07-18T00:00:00Z",
+    valid_until: "2026-10-18T00:00:00Z",
+    related: ["bakery-decision", "bakery-experiment"],
+    reflection: "The threshold passed with limited evidence.",
+    reusable_lesson: "Require a larger bounded sample before scale.",
+    reuse_evidence: [],
+  }, clock);
+  assert.equal(experience.record_type, "experience_record");
+  assert.equal(experience.review_status, "reviewed_experience");
+  const closed = versionExperienceRecord(
+    experience,
+    { status: "closed" },
+    "records/experiences/bakery-experience-001.v0001.yaml",
+    clock,
+  );
+  assert.equal(closed.status, "closed");
+  assert.deepEqual(closed.immutable_history_refs, [
+    "records/experiences/bakery-experience-001.v0001.yaml",
+  ]);
 });

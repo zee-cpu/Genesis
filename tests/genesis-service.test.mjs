@@ -96,6 +96,41 @@ function approvalInput(overrides = {}) {
   };
 }
 
+function reflectionInput(overrides = {}) {
+  return {
+    reviewer: "analyst",
+    validation_outcome: "passed",
+    domain: "customer_validation",
+    tags: ["bakery", "reconciliation"],
+    context: "A bounded manual validation with observed bakery sessions.",
+    supporting_evidence: ["observed_session_log"],
+    contradicting_evidence: ["interview://owner-2"],
+    reflection: "The measured reduction met the threshold, but the sample remains small.",
+    reusable_lesson: "Validate reconciliation gains with a larger sample before scaling.",
+    confidence_update: 0.7,
+    valid_from: "2026-07-17T12:00:00Z",
+    valid_until: "2026-10-15T12:00:00Z",
+    reuse_evidence: [],
+    ...overrides,
+  };
+}
+
+function outcomeDecisionInput(overrides = {}) {
+  return {
+    approver_principal_id: "genesis-owner",
+    actor: "analyst",
+    outcome: "pivot",
+    rationale: "The threshold passed, but the limited sample supports a narrower follow-up.",
+    constitution_review: "No constitutional conflict; this authorizes classification and closure only.",
+    evidence_review: "Supporting measurement and preserved counterevidence were reviewed together.",
+    ceo_recommendation: "Pivot to a larger bounded validation before any scale action.",
+    effective_at: "2026-07-17T12:00:00Z",
+    expires_at: "2026-07-24T12:00:00Z",
+    review_at: "2026-07-20T12:00:00Z",
+    ...overrides,
+  };
+}
+
 function createService(projectRoot, confirm = async () => true) {
   return createGenesisService({
     projectRoot,
@@ -223,11 +258,36 @@ await runSection("guidedNextUsesProjectionAndLifecycleState", async () => {
     });
     assert.equal(measurement.state, "reflection");
     assert.equal(measurement.record.status, "reflection");
+    assert.equal((await service.next("bakery")).action, "record_reflection");
+
+    const reflection = await service.recordReflection("bakery", reflectionInput());
+    assert.equal(reflection.state, "decision");
+    assert.equal(reflection.record.record_type, "experience_record");
+    assert.equal(reflection.records.some((record) => record.status === "decision"), true);
+    assert.equal((await service.next("bakery")).action, "decide_experiment");
+
+    await assert.rejects(
+      () => service.decideExperiment("bakery", outcomeDecisionInput({ approver_principal_id: "agent" })),
+      (error) => error.code === "HUMAN_AUTHORITY_REQUIRED",
+    );
+    const decided = await service.decideExperiment("bakery", outcomeDecisionInput());
+    assert.equal(decided.state, "outcome_approved");
+    assert.equal(decided.record.action_class, "major_bet");
+    assert.deepEqual(decided.record.scope.actions, ["close_experiment:bakery-experiment:pivot"]);
+    assert.equal((await service.next("bakery")).action, "close_experiment");
+
+    await assert.rejects(
+      () => service.closeExperiment("bakery", { actor: "builder" }),
+      (error) => error.code === "APPROVAL_ACTOR_MISMATCH",
+    );
+    const closed = await service.closeExperiment("bakery", { actor: "analyst" });
+    assert.equal(closed.state, "closed");
+    assert.equal(closed.record.status, "closed");
     assert.equal((await service.next("bakery")).action, "no_transition");
 
     const rebuild = await service.rebuildIndex();
     assert.equal(rebuild.projection_consistent, true);
-    assert.equal((await service.status("bakery")).state, "reflection");
+    assert.equal((await service.status("bakery")).state, "closed");
 
     fs.rmSync(workspacePaths(projectRoot).db, { force: true });
     await assert.rejects(

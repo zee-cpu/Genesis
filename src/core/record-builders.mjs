@@ -233,6 +233,77 @@ export function versionExperimentRecord(previous, changes, historyRef, clock, op
   return activeRegistry.validateRecord("experiment_record", experiment);
 }
 
+export function buildExperienceRecord(input, clock, options = {}) {
+  const activeRegistry = resolveRegistry(options);
+  const businessId = normalizeBusinessId(input.business_id);
+  const id = input.id ?? `${businessId}-experience-001`;
+  const now = timestamp(clock);
+  const experience = {
+    id,
+    record_type: "experience_record",
+    schema_version: SCHEMA_VERSION,
+    policy_version: POLICY_VERSION,
+    created_at: now,
+    updated_at: now,
+    owner: "analyst",
+    affected_business: businessId,
+    status: input.status ?? "active",
+    evidence_references: input.evidence_references,
+    related_records: input.related_records,
+    privacy_classification: privacy(input),
+    immutable_history_refs: input.immutable_history_refs
+      ?? [`records/experiences/${id}.v0001.yaml`],
+    timestamp: now,
+    business: businessId,
+    domain: input.domain,
+    tags: input.tags,
+    context: input.context,
+    hypothesis: input.hypothesis,
+    decision: input.decision,
+    action: input.action,
+    outcome: input.outcome,
+    baseline: input.baseline,
+    expected_result: input.expected_result,
+    metric_definition: input.metric_definition,
+    actual_result: input.actual_result,
+    supporting_evidence: input.supporting_evidence,
+    contradicting_evidence: input.contradicting_evidence ?? [],
+    confidence: input.confidence,
+    valid_from: input.valid_from ?? now,
+    valid_until: input.valid_until,
+    review_status: "reviewed_experience",
+    related: input.related,
+    duplicate: input.duplicate ?? [],
+    contradicts: input.contradicts ?? [],
+    supersedes: input.supersedes ?? [],
+    is_correction: false,
+    reflection: input.reflection,
+    reusable_lesson: input.reusable_lesson,
+    reuse_evidence: input.reuse_evidence ?? [],
+  };
+  return activeRegistry.validateRecord("experience_record", experience);
+}
+
+export function versionExperienceRecord(previous, changes, historyRef, clock, options = {}) {
+  const activeRegistry = resolveRegistry(options);
+  const experience = {
+    ...previous,
+    ...changes,
+    id: previous.id,
+    record_type: "experience_record",
+    schema_version: SCHEMA_VERSION,
+    policy_version: POLICY_VERSION,
+    created_at: previous.created_at,
+    updated_at: timestamp(clock),
+    affected_business: previous.affected_business,
+    immutable_history_refs: [...new Set([
+      ...previous.immutable_history_refs,
+      historyRef,
+    ])],
+  };
+  return activeRegistry.validateRecord("experience_record", experience);
+}
+
 export function buildApprovalRecord(input, clock, options = {}) {
   const activeRegistry = resolveRegistry(options);
   validateApprovalAuthority(input);

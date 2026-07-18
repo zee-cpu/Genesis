@@ -251,6 +251,20 @@ test("decision record carries the target customer", async () => {
   assert.equal(compileSchema("decision_record")(decision), false);
 });
 
+test("Major Bet decisions require reviews, recommendation, and approval", () => {
+  const decision = loadTemplate("decision_record");
+  decision.decision_class = "major_bet";
+  decision.approval_references = ["example-approval-001"];
+  const validate = compileSchema("decision_record");
+  assert.equal(validate(decision), false);
+  const missing = validate.errors
+    .filter((error) => error.keyword === "required")
+    .map((error) => error.params.missingProperty);
+  assert.equal(missing.includes("constitution_review"), true);
+  assert.equal(missing.includes("evidence_review"), true);
+  assert.equal(missing.includes("ceo_recommendation"), true);
+});
+
 test("record references use declared record identifiers", async () => {
   const policySet = await validator.loadPolicySet(ROOT);
   const record = policySet.templates.get("decision_record");

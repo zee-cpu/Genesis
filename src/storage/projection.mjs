@@ -19,11 +19,12 @@ function recordTypeForKind(kind) {
   if (kind === "approval") return "approval_record";
   if (kind === "decision") return "decision_record";
   if (kind === "experiment") return "experiment_record";
+  if (kind === "experience") return "experience_record";
   if (kind === "evidence") return "evidence_entry";
 
   throw new GenesisError("RECORD_KIND_INVALID", "Record kind is not supported", {
     path: "/kind",
-    correction: "Use approval, decision, experiment, or evidence",
+    correction: "Use approval, decision, experiment, experience, or evidence",
     escalation: "builder",
   });
 }
@@ -167,6 +168,7 @@ function recordKindForType(recordType) {
   if (recordType === "approval_record") return "approval";
   if (recordType === "decision_record") return "decision";
   if (recordType === "experiment_record") return "experiment";
+  if (recordType === "experience_record") return "experience";
   if (recordType === "evidence_entry") return "evidence";
   throw new GenesisError("RECORD_SCHEMA_INVALID", "Record failed its registered schema", {
     path: "/record_type",
@@ -289,7 +291,7 @@ function projectApproval(db, descriptor, record) {
     ? "approval_revoked"
     : record.decision === "denied"
       ? "approval_denied"
-      : ["active", "measurement", "reflection", "closed", "superseded"].includes(current.state)
+      : ["active", "measurement", "reflection", "decision", "outcome_approved", "closed", "superseded"].includes(current.state)
         ? current.state
         : "approved";
   upsertOpportunity(db, {
@@ -339,9 +341,13 @@ export function projectRecord(db, descriptor, record) {
       return;
     }
 
+    if (descriptor.kind === "experience") {
+      return;
+    }
+
     throw new GenesisError("RECORD_KIND_INVALID", "Record kind is not supported", {
       path: "/kind",
-      correction: "Use approval, decision, experiment, or evidence",
+      correction: "Use approval, decision, experiment, experience, or evidence",
       escalation: "builder",
     });
   });
@@ -414,7 +420,8 @@ export function rebuildProjection({ projectRoot, registry }) {
     ["decision", 0],
     ["evidence", 1],
     ["experiment", 2],
-    ["approval", 3],
+    ["experience", 3],
+    ["approval", 4],
   ]);
   const orderedDescriptors = [...descriptors].sort((left, right) => (
     projectionOrder.get(left.kind) - projectionOrder.get(right.kind)

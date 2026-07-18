@@ -18,14 +18,36 @@
     "expected_outcome": { "$ref": "#/$defs/nonempty" }, "metric": { "$ref": "#/$defs/nonempty" },
     "decision": { "$ref": "#/$defs/nonempty" }, "decision_date": { "$ref": "#/$defs/dateTime" },
     "review_date": { "$ref": "#/$defs/dateTime" }, "actual_outcome": { "type": ["string", "null"], "minLength": 1 },
-    "confidence_update": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+    "confidence_update": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "decision_class": { "enum": ["major_bet"] },
+    "recommendation_rationale": { "$ref": "#/$defs/nonempty" },
+    "constitution_review": { "$ref": "#/$defs/nonempty" },
+    "evidence_review": { "$ref": "#/$defs/nonempty" },
+    "ceo_recommendation": { "$ref": "#/$defs/nonempty" },
+    "approval_references": { "$ref": "#/$defs/nonemptyRecordRefs" }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "decision_class": { "const": "major_bet" } }, "required": ["decision_class"] },
+      "then": {
+        "required": ["recommendation_rationale", "constitution_review", "evidence_review", "ceo_recommendation", "approval_references"],
+        "properties": {
+          "recommendation_rationale": true,
+          "constitution_review": true,
+          "evidence_review": true,
+          "ceo_recommendation": true,
+          "approval_references": true
+        }
+      }
+    }
+  ],
   "$defs": {
     "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" }, "recordRef": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
     "semver": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }, "dateTime": { "type": "string", "format": "date-time" },
     "nonempty": { "type": "string", "minLength": 1 }, "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
     "refs": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/nonempty" } },
     "recordRefs": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/recordRef" } },
+    "nonemptyRecordRefs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/recordRef" } },
     "nonemptyRefs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/nonempty" } },
     "privacy": { "enum": ["public", "internal", "confidential", "restricted"] }
   }

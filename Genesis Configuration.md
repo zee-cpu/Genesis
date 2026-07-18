@@ -46,10 +46,13 @@ genesis approve-experiment <business-id>  # or deny-experiment
 genesis start-experiment <business-id>
 genesis record-execution <business-id>
 genesis record-measurement <business-id>
+genesis record-reflection <business-id>
+genesis decide-experiment <business-id>
+genesis close-experiment <business-id>
 genesis revoke-approval <business-id>     # when authority must be withdrawn
 ```
 
-Review is read-only. Approval and denial create immutable runtime approval records under `.genesis/records/approvals/`. Starting is a separate manual action that revalidates Human Authority, separation of duties, exact scope, actor, limits, effective time, expiry, and revocation state before recording the experiment as `active`. It does not perform experiment tasks. After the operator performs or stops the approved work, `record-execution` preserves the factual execution log, deviations, completion reason, timestamps, actual cost, data classes, and risk. It rejects actor, time, or exposure outside the approval. `record-measurement` is a separate analyst step that preserves the observed result, baseline comparison, evidence sources, and data-quality limitations. Revocation creates a new approval version and supersedes an active experiment without rewriting history.
+Review is read-only. Approval and denial create immutable runtime approval records under `.genesis/records/approvals/`. Starting is a separate manual action that revalidates Human Authority, separation of duties, exact scope, actor, limits, effective time, expiry, and revocation state before recording the experiment as `active`. It does not perform experiment tasks. After the operator performs or stops the approved work, `record-execution` preserves the factual execution log, deviations, completion reason, timestamps, actual cost, data classes, and risk. It rejects actor, time, or exposure outside the approval. `record-measurement` separately preserves the observed result, baseline comparison, evidence sources, and data-quality limitations. `record-reflection` creates a reviewed experience and confidence update. `decide-experiment` presents the exact outcome, evidence review, constitution review, and CEO recommendation at a Human Authority Major Bet gate. That approval authorizes only classification and closure; it does not authorize executing the selected outcome. `close-experiment` revalidates the decision approval before closing the linked experiment, decision, and experience versions. Revocation creates a new approval version and supersedes an active experiment without rewriting history.
 
 The local CLI does not authenticate or cryptographically verify the names entered by an operator. Treat access to the workspace and its operating account as part of the trust boundary. Do not expose this workflow as a hosted or multi-user service without adding identity and access controls.
 

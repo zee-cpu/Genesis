@@ -357,7 +357,7 @@ test("CLI dispatches Human review, approval, denial, start, and revocation comma
   }
 });
 
-test("guided next plans, approves, starts, records execution, and records measurement", { concurrency: false }, async () => {
+test("guided next progresses from discovery through governed experiment closure", { concurrency: false }, async () => {
   const projectRoot = makeProjectRoot();
   const output = createBuffer();
   try {
@@ -482,6 +482,56 @@ test("guided next plans, approves, starts, records execution, and records measur
       clock: CLOCK,
       output,
       errorOutput: output,
+      prompter: createScriptedPrompter([
+        "passed",
+        "customer_validation",
+        "bakery,reconciliation",
+        "A bounded manual validation with observed bakery sessions",
+        "",
+        "",
+        "The measured reduction passed, but the sample remains small",
+        "Use a larger bounded sample before scaling",
+        "0.7",
+        "",
+        "",
+        "y",
+      ], output),
+    }), 0);
+    assert.equal((await setup.status("bakery")).state, "decision");
+
+    assert.equal(await runCli(["next", "bakery"], {
+      projectRoot,
+      repoRoot: ROOT,
+      clock: CLOCK,
+      output,
+      errorOutput: output,
+      prompter: createScriptedPrompter([
+        "2",
+        "The limited sample supports a narrower follow-up",
+        "No constitutional conflict; classification and closure only",
+        "Supporting and contradicting evidence were reviewed",
+        "Pivot to a larger bounded validation",
+        "y",
+      ], output),
+    }), 0);
+    assert.equal((await setup.status("bakery")).state, "outcome_approved");
+
+    assert.equal(await runCli(["next", "bakery"], {
+      projectRoot,
+      repoRoot: ROOT,
+      clock: CLOCK,
+      output,
+      errorOutput: output,
+      prompter: createScriptedPrompter(["y"], output),
+    }), 0);
+    assert.equal((await setup.status("bakery")).state, "closed");
+
+    assert.equal(await runCli(["next", "bakery"], {
+      projectRoot,
+      repoRoot: ROOT,
+      clock: CLOCK,
+      output,
+      errorOutput: output,
       prompter: createScriptedPrompter([], output),
     }), 0);
 
@@ -494,7 +544,13 @@ test("guided next plans, approves, starts, records execution, and records measur
     assert.match(text, /Current state: measurement/);
     assert.match(text, /Guided action: record_measurement/);
     assert.match(text, /Current state: reflection/);
-    assert.match(text, /Reflection and outcome selection/);
+    assert.match(text, /Guided action: record_reflection/);
+    assert.match(text, /Current state: decision/);
+    assert.match(text, /Human Authority Major Bet decision envelope/);
+    assert.match(text, /approve this exact outcome\? \[y\/N\]/);
+    assert.match(text, /Current state: outcome_approved/);
+    assert.match(text, /Guided action: close_experiment/);
+    assert.match(text, /Current state: closed/);
   } finally {
     cleanupProjectRoot(projectRoot);
   }
