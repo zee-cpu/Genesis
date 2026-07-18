@@ -126,28 +126,26 @@ The design has four important properties:
 The current user journey is:
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Discover: genesis start-business
-    Discover --> Discover: genesis add-evidence
-    Discover --> Discover: genesis correct-decision
-    Discover --> ExperimentPlan: discover gate passes
-    ExperimentPlan --> ApprovalPending: genesis plan-experiment
-    ApprovalPending --> ApprovalPending: genesis revise-experiment
-    ApprovalPending --> Approved: genesis approve-experiment
-    ApprovalPending --> Denied: genesis deny-experiment
-    Approved --> Active: genesis start-experiment
-    Active --> Measurement: genesis record-execution
-    Measurement --> Reflection: genesis record-measurement
-    Reflection --> Decision: genesis record-reflection
-    Decision --> OutcomeApproved: genesis decide-experiment
-    OutcomeApproved --> Closed: genesis close-experiment
-    Closed --> Discover: genesis start-follow-up / start-learning-lab
-    Approved --> Revoked: genesis revoke-approval
-    Active --> Superseded: genesis revoke-approval
-    note right of Active
-      Genesis does not run the experiment.
-      The operator records completed work separately.
-    end note
+flowchart TD
+    Start([Start]) -->|genesis start-business| Discover[Discover]
+    Discover -->|genesis add-evidence| Discover
+    Discover -->|genesis correct-decision| Discover
+    Discover -->|discover gate passes| ExperimentPlan[Experiment plan]
+    ExperimentPlan -->|genesis plan-experiment| ApprovalPending[Approval pending]
+    ApprovalPending -->|genesis revise-experiment| ApprovalPending
+    ApprovalPending -->|genesis approve-experiment| Approved[Approved]
+    ApprovalPending -->|genesis deny-experiment| Denied[Denied]
+    Approved -->|genesis start-experiment| Active[Active]
+    Active -->|genesis record-execution| Measurement[Measurement]
+    Measurement -->|genesis record-measurement| Reflection[Reflection]
+    Reflection -->|genesis record-reflection| Decision[Decision]
+    Decision -->|genesis decide-experiment| OutcomeApproved[Outcome approved]
+    OutcomeApproved -->|genesis close-experiment| Closed[Closed]
+    Closed -->|genesis start-follow-up| Discover
+    Closed -->|genesis start-learning-lab| Discover
+    Approved -->|genesis revoke-approval| Revoked[Revoked]
+    Active -->|genesis revoke-approval| Superseded[Superseded]
+    Active -.-> Note["Genesis records completed work;<br/>it does not run the experiment."]
 ```
 
 ## Requirements
