@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "schema_version": "1.0.0",
+  "asset_id": "weather-forecast-tool",
+  "asset_type": "agent_tool_configuration",
+  "name": "Weather Forecast Tool",
+  "description": "Collects a normalized location and forecast window for a weather provider.",
+  "prompt_template": "Return a concise weather forecast for {{location}} covering {{forecast_days}} day(s).",
+  "input_schema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "location",
+      "forecast_days",
+      "units"
+    ],
+    "properties": {
+      "location": {
+        "type": "string",
+        "minLength": 2
+      },
+      "forecast_days": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 14
+      },
+      "units": {
+        "enum": [
+          "metric",
+          "imperial"
+        ]
+      }
+    }
+  },
+  "example_input": {
+    "location": "Dubai, AE",
+    "forecast_days": 3,
+    "units": "metric"
+  }
+}

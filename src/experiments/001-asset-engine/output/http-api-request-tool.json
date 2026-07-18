@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "schema_version": "1.0.0",
+  "asset_id": "http-api-request-tool",
+  "asset_type": "agent_tool_configuration",
+  "name": "Controlled HTTP API Request Tool",
+  "description": "Describes an allowlisted HTTP request without embedding credentials or unrestricted methods.",
+  "prompt_template": "Call the approved endpoint {{endpoint_id}} using {{method}} and return structured JSON.",
+  "input_schema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "endpoint_id",
+      "method",
+      "query"
+    ],
+    "properties": {
+      "endpoint_id": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]+$"
+      },
+      "method": {
+        "enum": [
+          "GET",
+          "POST"
+        ]
+      },
+      "query": {
+        "type": "object",
+        "additionalProperties": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "example_input": {
+    "endpoint_id": "public-catalog",
+    "method": "GET",
+    "query": {
+      "page": 1
+    }
+  }
+}

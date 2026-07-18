@@ -1,0 +1,281 @@
+{
+  "distribution_schema_version": "1.0.0",
+  "package_id": "agentic-digital-assets",
+  "generated_at": "2026-07-18T17:50:55.706Z",
+  "asset_count": 5,
+  "network_boundary": {
+    "status": "offline_verified",
+    "external_requests": 0,
+    "audited_generator_imports": [
+      "ajv",
+      "node:fs/promises",
+      "node:path",
+      "node:perf_hooks",
+      "node:url"
+    ],
+    "generator_assets_verified": 5,
+    "generator_elapsed_ms": 85.4
+  },
+  "assets": [
+    {
+      "file_name": "code-review-prompt.json",
+      "sha256": "2552ac28f66efcdff41885f9e841a89d67a03cfa7c9e6a307148ce9508e6ce89",
+      "content": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "schema_version": "1.0.0",
+        "asset_id": "code-review-prompt",
+        "asset_type": "agent_tool_configuration",
+        "name": "Structured Code Review Prompt",
+        "description": "Requests a bounded code review with explicit language, focus areas, and severity threshold.",
+        "prompt_template": "Review the supplied {{language}} code. Report only findings at or above {{minimum_severity}}.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "language",
+            "source",
+            "focus_areas",
+            "minimum_severity"
+          ],
+          "properties": {
+            "language": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1
+            },
+            "focus_areas": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "correctness",
+                  "security",
+                  "performance",
+                  "maintainability"
+                ]
+              }
+            },
+            "minimum_severity": {
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "critical"
+              ]
+            }
+          }
+        },
+        "example_input": {
+          "language": "javascript",
+          "source": "export const sum = (a, b) => a + b;",
+          "focus_areas": [
+            "correctness",
+            "maintainability"
+          ],
+          "minimum_severity": "medium"
+        }
+      }
+    },
+    {
+      "file_name": "database-query-tool.json",
+      "sha256": "ee1f7e409ddb892f1d82c71e8bde4f87c8acc5a4dd6e26956c2adc7fce628e09",
+      "content": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "schema_version": "1.0.0",
+        "asset_id": "database-query-tool",
+        "asset_type": "agent_tool_configuration",
+        "name": "Read-Only Database Query Tool",
+        "description": "Defines a bounded, parameterized, read-only database query request.",
+        "prompt_template": "Execute the named read-only query {{query_name}} with the supplied parameters and row limit.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "query_name",
+            "parameters",
+            "max_rows"
+          ],
+          "properties": {
+            "query_name": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]+$"
+            },
+            "parameters": {
+              "type": "object"
+            },
+            "max_rows": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          }
+        },
+        "example_input": {
+          "query_name": "recent_orders",
+          "parameters": {
+            "days": 7
+          },
+          "max_rows": 100
+        }
+      }
+    },
+    {
+      "file_name": "http-api-request-tool.json",
+      "sha256": "c5d650671e2ad5b60bca6b7e2c8cb290e04b68486e305b106b5723d9b5badd5f",
+      "content": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "schema_version": "1.0.0",
+        "asset_id": "http-api-request-tool",
+        "asset_type": "agent_tool_configuration",
+        "name": "Controlled HTTP API Request Tool",
+        "description": "Describes an allowlisted HTTP request without embedding credentials or unrestricted methods.",
+        "prompt_template": "Call the approved endpoint {{endpoint_id}} using {{method}} and return structured JSON.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "endpoint_id",
+            "method",
+            "query"
+          ],
+          "properties": {
+            "endpoint_id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]+$"
+            },
+            "method": {
+              "enum": [
+                "GET",
+                "POST"
+              ]
+            },
+            "query": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "example_input": {
+          "endpoint_id": "public-catalog",
+          "method": "GET",
+          "query": {
+            "page": 1
+          }
+        }
+      }
+    },
+    {
+      "file_name": "json-schema-validation-tool.json",
+      "sha256": "f6d47f3987d1770fc9b45ad7b22156cdca062d4cee776c86aeba97f6481c2b0f",
+      "content": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "schema_version": "1.0.0",
+        "asset_id": "json-schema-validation-tool",
+        "asset_type": "agent_tool_configuration",
+        "name": "JSON Schema Validation Tool",
+        "description": "Defines a deterministic request for validating a JSON value against a supplied schema.",
+        "prompt_template": "Validate {{document}} against {{schema}} and return a path-indexed error list.",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema",
+            "document",
+            "all_errors"
+          ],
+          "properties": {
+            "schema": {
+              "type": "object"
+            },
+            "document": {},
+            "all_errors": {
+              "type": "boolean"
+            }
+          }
+        },
+        "example_input": {
+          "schema": {
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          },
+          "document": {
+            "id": "asset-001"
+          },
+          "all_errors": true
+        }
+      }
+    },
+    {
+      "file_name": "weather-forecast-tool.json",
+      "sha256": "a2b8648e4e8e05ebaaf8ead8bbfca04287902381ae554d0de937535655769524",
+      "content": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "schema_version": "1.0.0",
+        "asset_id": "weather-forecast-tool",
+        "asset_type": "agent_tool_configuration",
+        "name": "Weather Forecast Tool",
+        "description": "Collects a normalized location and forecast window for a weather provider.",
+        "prompt_template": "Return a concise weather forecast for {{location}} covering {{forecast_days}} day(s).",
+        "input_schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "location",
+            "forecast_days",
+            "units"
+          ],
+          "properties": {
+            "location": {
+              "type": "string",
+              "minLength": 2
+            },
+            "forecast_days": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 14
+            },
+            "units": {
+              "enum": [
+                "metric",
+                "imperial"
+              ]
+            }
+          }
+        },
+        "example_input": {
+          "location": "Dubai, AE",
+          "forecast_days": 3,
+          "units": "metric"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "schema_version": "1.0.0",
+  "asset_id": "database-query-tool",
+  "asset_type": "agent_tool_configuration",
+  "name": "Read-Only Database Query Tool",
+  "description": "Defines a bounded, parameterized, read-only database query request.",
+  "prompt_template": "Execute the named read-only query {{query_name}} with the supplied parameters and row limit.",
+  "input_schema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "query_name",
+      "parameters",
+      "max_rows"
+    ],
+    "properties": {
+      "query_name": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]+$"
+      },
+      "parameters": {
+        "type": "object"
+      },
+      "max_rows": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 1000
+      }
+    }
+  },
+  "example_input": {
+    "query_name": "recent_orders",
+    "parameters": {
+      "days": 7
+    },
+    "max_rows": 100
+  }
+}

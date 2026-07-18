@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "schema_version": "1.0.0",
+  "asset_id": "json-schema-validation-tool",
+  "asset_type": "agent_tool_configuration",
+  "name": "JSON Schema Validation Tool",
+  "description": "Defines a deterministic request for validating a JSON value against a supplied schema.",
+  "prompt_template": "Validate {{document}} against {{schema}} and return a path-indexed error list.",
+  "input_schema": {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "schema",
+      "document",
+      "all_errors"
+    ],
+    "properties": {
+      "schema": {
+        "type": "object"
+      },
+      "document": {},
+      "all_errors": {
+        "type": "boolean"
+      }
+    }
+  },
+  "example_input": {
+    "schema": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      }
+    },
+    "document": {
+      "id": "asset-001"
+    },
+    "all_errors": true
+  }
+}
