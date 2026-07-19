@@ -1,0 +1,22 @@
+{
+  "name": "get_weather",
+  "description": "Return the current weather for a city.",
+  "parameters": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "city": {
+        "type": "string",
+        "minLength": 1
+      },
+      "country_code": {
+        "type": "string",
+        "pattern": "^[A-Z]{2}$"
+      }
+    },
+    "required": [
+      "city"
+    ]
+  }
+}

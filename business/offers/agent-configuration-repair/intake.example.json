@@ -1,0 +1,21 @@
+{
+  "customer_reference": "customer-controlled-reference",
+  "configuration_type": "ai-agent-tool-schema",
+  "intended_behavior": "Validate a weather lookup tool with a required city and optional ISO country code.",
+  "target_validator_or_runtime": "JSON Schema Draft 2020-12",
+  "files": [
+    "weather-tool.json"
+  ],
+  "observed_error": "Validator rejects required because it is not an array.",
+  "acceptance_checks": [
+    "The configuration parses as JSON.",
+    "A payload containing city passes schema validation.",
+    "A payload missing city fails schema validation."
+  ],
+  "data_confirmation": {
+    "contains_credentials": false,
+    "contains_personal_data": false,
+    "contains_proprietary_source_code": false,
+    "contains_regulated_data": false
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "get_weather",
+  "description": "Return the current weather for a city.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "city": {
+        "type": "string"
+      },
+      "country_code": {
+        "type": "string",
+        "minLength": 2,
+        "maxLength": 2
+      }
+    },
+    "required": "city"
+  }
+}

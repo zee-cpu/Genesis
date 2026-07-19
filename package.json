@@ -59,12 +59,14 @@
     "web:test": "npm --prefix apps/operator-console test",
     "check:web": "npm run web:test && npm run web:build",
     "web:start": "npm --prefix apps/operator-console run start",
-    "web:seed-demo": "node apps/operator-console/scripts/seed-demo-workspace.mjs"
+    "web:seed-demo": "node apps/operator-console/scripts/seed-demo-workspace.mjs",
+    "offer:payment:build": "node business/offers/agent-configuration-repair/payment/build-payment-page.mjs"
   },
   "dependencies": {
     "ajv": "8.18.0",
     "ajv-formats": "3.0.1",
     "better-sqlite3": "12.11.1",
+    "qrcode": "^1.5.4",
     "yaml": "2.8.3"
   }
 }
