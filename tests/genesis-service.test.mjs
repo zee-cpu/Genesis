@@ -469,9 +469,19 @@ await runSection("guidedNextUsesProjectionAndLifecycleState", async () => {
       comparison: "The result improved on the 120-minute baseline by 65 minutes",
       measurement_evidence: ["observed_session_log"],
       data_quality: { assessment: "limited", limitations: ["small_sample"] },
+      calculation: {
+        method: "count",
+        numerator: 5,
+        baseline: 0,
+        threshold: 5,
+        operator: "gte",
+        unit: "validated_assets",
+      },
     });
     assert.equal(measurement.state, "reflection");
     assert.equal(measurement.record.status, "reflection");
+    assert.equal(measurement.record.measurement_calculation.observed_value, 5);
+    assert.equal(measurement.record.measurement_calculation.calculated_outcome, "passed");
     assert.equal((await service.next("bakery")).action, "record_reflection");
 
     const reflection = await service.recordReflection("bakery", reflectionInput());

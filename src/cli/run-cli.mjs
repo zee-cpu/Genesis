@@ -54,6 +54,7 @@ const HELP = [
   "  --input <file.json> Read proposal fields from JSON; final confirmation is still required",
   "  --file <path>       Local structured evidence JSON for import-evidence",
   "  --execution-file <path> Local structured execution JSON for record-execution",
+  "  --measurement-file <path> Local structured measurement JSON for record-measurement",
   "  --signing-key <path> SSH private key, or agent-backed .pub key, used for Human Authority",
   "  --business <id>     Filter list or evidence search by business",
   "  --state <state>      Filter opportunity list by lifecycle state",
@@ -74,6 +75,7 @@ function parseCliOptions(values) {
   let signingKeyPath = null;
   let evidenceFilePath = null;
   let executionFilePath = null;
+  let measurementFilePath = null;
   const filters = {};
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];
@@ -123,6 +125,16 @@ function parseCliOptions(values) {
           escalation: "operator",
         });
       }
+    } else if (value === "--measurement-file") {
+      measurementFilePath = values[index + 1];
+      index += 1;
+      if (!measurementFilePath) {
+        throw new GenesisError("MEASUREMENT_IMPORT_FILE_REQUIRED", "--measurement-file requires a local JSON file path", {
+          path: "/measurement_file",
+          correction: "Use --measurement-file path/to/measurement.json with genesis record-measurement",
+          escalation: "analyst",
+        });
+      }
     } else if (value === "--blocked") {
       filters.blocked = true;
     } else if (["--business", "--state", "--review", "--stance", "--privacy"].includes(value)) {
@@ -146,7 +158,7 @@ function parseCliOptions(values) {
       positional.push(value);
     }
   }
-  return { positional, json, inputPath, signingKeyPath, evidenceFilePath, executionFilePath, filters };
+  return { positional, json, inputPath, signingKeyPath, evidenceFilePath, executionFilePath, measurementFilePath, filters };
 }
 
 function readStructuredInput(projectRoot, inputPath) {
@@ -244,6 +256,45 @@ async function askGuidedChoice(prompter, question, allowed, fallback) {
     const answer = (await prompter.ask(question)).trim() || fallback;
     if (allowed.includes(answer)) return answer;
   }
+}
+
+async function askOptionalNumber(prompter, question) {
+  while (true) {
+    const answer = (await prompter.ask(question)).trim();
+    if (!answer) return undefined;
+    const value = Number(answer);
+    if (Number.isFinite(value)) return value;
+  }
+}
+
+async function gatherMetricCalculation(prompter) {
+  if (!(await prompter.confirm("Calculate and evaluate a numeric metric automatically? [y/N] "))) return undefined;
+  const method = await askGuidedChoice(
+    prompter,
+    "Calculation method (count, sum, average, ratio, or percentage): ",
+    ["count", "sum", "average", "ratio", "percentage"],
+    undefined,
+  );
+  const numerator = await askGuidedNumber(prompter, ["count", "sum"].includes(method) ? "Observed numeric value: " : "Numerator or total value: ", {
+    fallback: Number.NaN,
+    minimum: Number.NEGATIVE_INFINITY,
+  });
+  const denominator = ["average", "ratio", "percentage"].includes(method)
+    ? await askGuidedNumber(prompter, "Denominator or observation count: ", { fallback: Number.NaN, minimum: Number.NEGATIVE_INFINITY })
+    : undefined;
+  const baseline = await askOptionalNumber(prompter, "Numeric baseline (blank if unavailable): ");
+  const threshold = await askGuidedNumber(prompter, "Pass/fail threshold: ", {
+    fallback: Number.NaN,
+    minimum: Number.NEGATIVE_INFINITY,
+  });
+  const operator = await askGuidedChoice(
+    prompter,
+    "Threshold comparison (gte, gt, lte, lt, or eq): ",
+    ["gte", "gt", "lte", "lt", "eq"],
+    undefined,
+  );
+  const unit = await askRequired(prompter, "Metric unit (for example assets, minutes, percent): ");
+  return { method, numerator, ...(denominator === undefined ? {} : { denominator }), ...(baseline === undefined ? {} : { baseline }), threshold, operator, unit };
 }
 
 async function gatherStartBusinessInput(prompter, output) {
@@ -549,7 +600,7 @@ async function gatherExecutionInput(prompter, guidance) {
 
 async function gatherMeasurementInput(prompter, guidance) {
   const defaults = guidance.defaults ?? {};
-  return {
+  const measurement = {
     reviewer: defaults.reviewer ?? "analyst",
     actual_result: await askRequired(prompter, "Observed metric result: "),
     comparison: await askRequired(prompter, "Comparison with the preregistered baseline and minimum effect: "),
@@ -568,6 +619,8 @@ async function gatherMeasurementInput(prompter, guidance) {
       limitations: parseCommaList(await prompter.ask("Data-quality limitations (comma-separated; blank for none): ")),
     },
   };
+  const calculation = await gatherMetricCalculation(prompter);
+  return calculation ? { ...measurement, calculation } : measurement;
 }
 
 async function gatherReflectionInput(prompter, guidance) {
@@ -706,6 +759,13 @@ export async function runCli(argv, dependencies = {}) {
         escalation: "operator",
       });
     }
+    if (options.measurementFilePath && command !== "record-measurement") {
+      throw new GenesisError("MEASUREMENT_IMPORT_OPTION_UNSUPPORTED", "--measurement-file is only supported by record-measurement", {
+        path: "/measurement_file",
+        correction: "Use genesis record-measurement <business-id> --measurement-file path/to/measurement.json",
+        escalation: "analyst",
+      });
+    }
     const structuredInput = options.inputPath
       ? readStructuredInput(projectRoot, options.inputPath)
       : null;
@@ -714,6 +774,13 @@ export async function runCli(argv, dependencies = {}) {
         path: "/execution_file",
         correction: "Use one reviewed execution source at a time",
         escalation: "operator",
+      });
+    }
+    if (structuredInput && options.measurementFilePath) {
+      throw new GenesisError("MEASUREMENT_IMPORT_INPUT_CONFLICT", "record-measurement accepts either --input or --measurement-file, not both", {
+        path: "/measurement_file",
+        correction: "Use one reviewed measurement source at a time",
+        escalation: "analyst",
       });
     }
     const inputUnsupportedCommands = new Set(["identity", "verify-workspace", "sync", "import-evidence", "execution-checklist", "list", "search", "export-report", "status", "review-experiment", "rebuild-index"]);
@@ -1203,7 +1270,9 @@ export async function runCli(argv, dependencies = {}) {
         ? options.executionFilePath
           ? await service.importExecution(businessId, options.executionFilePath)
           : await service.recordExecution(businessId, structuredInput ?? await gatherExecutionInput(prompter, guidance))
-        : await service.recordMeasurement(businessId, structuredInput ?? await gatherMeasurementInput(prompter, guidance));
+        : options.measurementFilePath
+          ? await service.importMeasurement(businessId, options.measurementFilePath)
+          : await service.recordMeasurement(businessId, structuredInput ?? await gatherMeasurementInput(prompter, guidance));
       writeMutationResult(result, output, errorOutput);
       return 0;
     }

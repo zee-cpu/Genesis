@@ -262,6 +262,7 @@ function ExperimentView({ experiment }: { experiment: Record<string, unknown> })
   const limits = (experiment.limits ?? {}) as Record<string, unknown>;
   const actual = (experiment.actual ?? experiment.execution ?? {}) as Record<string, unknown>;
   const measurement = (experiment.measurement ?? {}) as Record<string, unknown>;
+  const calculation = (experiment.measurement_calculation ?? {}) as Record<string, unknown>;
 
   const planned: Array<[string, unknown]> = [
     ["Hypothesis", experiment.hypothesis],
@@ -287,6 +288,9 @@ function ExperimentView({ experiment }: { experiment: Record<string, unknown> })
     ["Actual labor (hours)", actual.labor_hours ?? actual.actual_labor_hours],
     ["Execution summary", actual.summary ?? experiment.execution_summary],
     ["Observed result", measurement.observed_result ?? experiment.observed_result],
+    ["Calculated value", calculation.observed_value],
+    ["Calculated outcome", calculation.calculated_outcome],
+    ["Threshold met", calculation.threshold_met],
     ["Comparison", measurement.comparison ?? experiment.comparison],
     ["Data quality", measurement.data_quality ?? experiment.data_quality],
     ["Limitations", measurement.limitations ?? experiment.limitations],

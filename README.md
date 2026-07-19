@@ -470,6 +470,18 @@ genesis record-execution <business-id> --execution-file execution.json
 
 The file must include the actor, factual `execution_log`, completion reason, start and completion times, actual cost, actual public/internal data classes, and actual risk level. Genesis adds a SHA-256 attachment marker, then revalidates the signed approval, exact actor, timestamps, cash, labor, duration, data class, and risk before the usual confirmation. It does not archive the raw file or execute its contents.
 
+Measurement can likewise be imported from a reviewed local JSON summary:
+
+```bash
+genesis record-measurement <business-id> --measurement-file measurement.json
+```
+
+The file must contain `reviewer`, `actual_result`, `comparison`, a non-empty `measurement_evidence` array, and `data_quality` with an `assessment` (`adequate`, `limited`, or `unreliable`) plus a `limitations` array. Limited or unreliable data requires at least one limitation. Genesis rejects unknown fields, unsafe files, and malformed values, records the source SHA-256 digest as provenance, and still shows the normal proposal confirmation before writing immutable records.
+
+An optional `calculation` object makes the result machine-checkable. It accepts `count`, `sum`, `average`, `ratio`, or `percentage`, together with numeric operands, a threshold, and one of `gte`, `gt`, `lte`, `lt`, or `eq`. Genesis calculates the observed value, change from baseline, whether the threshold was met, and a provisional `passed` or `failed` outcome. The later analyst reflection remains a separate review step and cannot be skipped.
+
+The interactive `genesis next <business-id>` measurement step offers the same calculation as a short optional guided sequence. It asks only for values required by the selected method; operators can decline and preserve a qualitative reviewed result instead.
+
 | Command | Purpose | Writes records? | Expected end state |
 |---|---|---:|---|
 | `genesis identity setup` | Establish the append-only `genesis-owner` SSH trust anchor after showing its fingerprint | Writes an identity event after confirmation | Identity verified |

@@ -237,6 +237,27 @@ test("measurement and reflection states require separate execution and result ev
   assert.equal(compileSchema("experiment_record")(reflection), false);
 });
 
+test("experiment measurement calculation is strict and machine-readable", () => {
+  const reflection = loadTemplate("experiment_record");
+  reflection.status = "reflection";
+  reflection.measurement_calculation = {
+    method: "count",
+    numerator: 5,
+    denominator: null,
+    baseline: 0,
+    threshold: 5,
+    operator: "gte",
+    unit: "assets",
+    observed_value: 5,
+    change_from_baseline: 5,
+    threshold_met: true,
+    calculated_outcome: "passed",
+  };
+  assert.equal(compileSchema("experiment_record")(reflection), true);
+  reflection.measurement_calculation.bypass = true;
+  assert.equal(compileSchema("experiment_record")(reflection), false);
+});
+
 test("closed validation experiment requires closure and validation outcome", async () => {
   const closed = loadTemplate("experiment_record");
   delete closed.validation_outcome;

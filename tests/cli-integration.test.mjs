@@ -638,9 +638,20 @@ test("guided next progresses from discovery through governed experiment closure"
         "limited",
         "small sample",
         "y",
+        "average",
+        "110",
+        "2",
+        "120",
+        "60",
+        "lte",
+        "minutes",
+        "y",
       ], output),
     }), 0);
     assert.equal((await setup.status("bakery")).state, "reflection");
+    const measuredReview = await setup.reviewExperiment("bakery");
+    assert.equal(measuredReview.experiment.measurement_calculation.observed_value, 55);
+    assert.equal(measuredReview.experiment.measurement_calculation.calculated_outcome, "passed");
 
     assert.equal(await runCli(["next", "bakery"], {
       projectRoot,

@@ -59,6 +59,23 @@
     },
     "measurement_reviewer": { "$ref": "#/$defs/nonempty" },
     "measurement_evidence": { "$ref": "#/$defs/nonemptyRefs" },
+    "measurement_calculation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["method", "numerator", "denominator", "baseline", "threshold", "operator", "unit", "observed_value", "change_from_baseline", "threshold_met", "calculated_outcome"],
+      "properties": {
+        "method": { "enum": ["count", "sum", "average", "ratio", "percentage"] },
+        "numerator": { "type": "number" },
+        "denominator": { "type": ["number", "null"] },
+        "baseline": { "type": ["number", "null"] },
+        "threshold": { "type": "number" },
+        "operator": { "enum": ["gte", "gt", "lte", "lt", "eq"] },
+        "unit": { "$ref": "#/$defs/nonempty" },
+        "observed_value": { "type": "number" },
+        "change_from_baseline": { "type": ["number", "null"] },
+        "threshold_met": { "type": "boolean" },
+        "calculated_outcome": { "enum": ["passed", "failed"] }
+      }
+    },
     "results": { "$ref": "#/$defs/nonempty" }, "reflection": { "$ref": "#/$defs/nonempty" },
     "outcome": { "enum": ["scale", "pivot", "learning_lab", "archive", "kill"] }, "experience_reference": { "$ref": "#/$defs/recordRef" },
     "confidence_update": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },

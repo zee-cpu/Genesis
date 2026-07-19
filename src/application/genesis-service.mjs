@@ -7,7 +7,9 @@ import { evaluateDiscoverGate, buildStatus } from "../core/discovery-workflow.mj
 import { GenesisError } from "../core/errors.mjs";
 import { readStructuredEvidenceImport } from "../core/evidence-import.mjs";
 import { readStructuredExecutionImport } from "../core/execution-import.mjs";
+import { readStructuredMeasurementImport } from "../core/measurement-import.mjs";
 import { normalizeBusinessId } from "../core/ids.mjs";
+import { calculateMetric } from "../core/metric-calculation.mjs";
 import { createSchemaRegistry } from "../core/schema-registry.mjs";
 import { signApprovalRecord, verifyApprovalRecord } from "../security/approval-signatures.mjs";
 import { bootstrapHumanAuthority, inspectHumanAuthorityIdentity, revokeHumanAuthorityKey } from "../security/identity-store.mjs";
@@ -1662,6 +1664,7 @@ function recordMeasurementProposal(projectRoot, businessId, input, clock, regist
     });
   }
 
+  const measurementCalculation = input.calculation === undefined ? null : calculateMetric(input.calculation);
   const record = versionExperimentRecord(
     latestExperiment.record,
     {
@@ -1674,6 +1677,7 @@ function recordMeasurementProposal(projectRoot, businessId, input, clock, regist
       },
       measurement_reviewer: input.reviewer,
       measurement_evidence: input.measurement_evidence,
+      ...(measurementCalculation ? { measurement_calculation: measurementCalculation } : {}),
       results: input.actual_result,
     },
     latestExperiment.descriptor.relativePath,
@@ -2371,6 +2375,13 @@ export function createGenesisService({
     async recordMeasurement(businessId, input) {
       return runWithProposal(
         () => recordMeasurementProposal(projectRoot, businessId, input, clock, activeRegistry),
+        "record-measurement",
+      );
+    },
+
+    async importMeasurement(businessId, filePath) {
+      return runWithProposal(
+        () => recordMeasurementProposal(projectRoot, businessId, readStructuredMeasurementImport(filePath), clock, activeRegistry),
         "record-measurement",
       );
     },
