@@ -1,0 +1,65 @@
+id: approval-offer-publication-2026-07-20
+record_type: approval_record
+schema_version: 1.0.0
+policy_version: 2.0.1
+created_at: 2026-07-19T22:17:02.000Z
+updated_at: 2026-07-19T22:17:02.000Z
+owner: human_authority
+affected_business: agent-configuration-repair
+status: active
+evidence_references:
+  - human-authority://genesis-owner/offer-publication/2026-07-20
+related_records:
+  - git://commit/938d221
+privacy_classification: public
+immutable_history_refs:
+  - records/approvals/approval-offer-publication-2026-07-20.yaml
+approver_role: human_authority
+approver_principal_id: genesis-owner
+requester: lead-developer
+actor: operator
+action_class: protected_action
+scope:
+  actions:
+    - production_change:github-publication
+    - public_representation:agent-configuration-repair-offer
+    - public_representation:bitcoin-payment-page
+  wildcard: false
+evidence_snapshot:
+  - human-authority://genesis-owner/offer-publication/2026-07-20
+  - git://commit/938d221
+limits:
+  cash_usd: 0
+  labor_hours: 0.25
+  duration_days: 1
+  data_classes:
+    - public
+  risk_level: high
+decision: approved
+rationale: >-
+  Publish commit 938d221 to zee-cpu/Genesis main and publicly present the $49
+  Agent Configuration Repair offer and its Bitcoin payment page. This excludes
+  customer communication, financial transactions, wallet or private-key access,
+  automated payment verification, refunds, and changes beyond commit 938d221.
+issued_at: 2026-07-19T22:17:02.000Z
+effective_at: 2026-07-19T22:17:02.000Z
+expires_at: 2026-07-20T22:17:02.000Z
+review_at: 2026-07-20T22:17:02.000Z
+revoked: false
+revocation_reference: null
+signature:
+  scheme: sshsig
+  namespace: genesis-approval-v1
+  canonicalization: RFC8785
+  digest_algorithm: sha256
+  payload_digest: sha256:5ed31b80c49c1f420048188784d07589257587b7b62eff830d635e9503a77030
+  principal_id: genesis-owner
+  key_fingerprint: SHA256:lPXYLMb07Xh12p2BJF/u0+pxHj91n6xiNXYe6vraCdo
+  signed_at: 2026-07-19T22:17:02.000Z
+  signature: |-
+    -----BEGIN SSH SIGNATURE-----
+    U1NIU0lHAAAAAQAAADMAAAALc3NoLWVkMjU1MTkAAAAgo4NKkrJeJ00DeK7q4tm3NoW6jM
+    cP6oa5Tsx+ln6Ko6MAAAATZ2VuZXNpcy1hcHByb3ZhbC12MQAAAAAAAAAGc2hhNTEyAAAA
+    UwAAAAtzc2gtZWQyNTUxOQAAAEDsxpMZDZ1cR1rj5q2u7n61uuATUE4K84s3xnla0/IvY+
+    pfyv3HfEt4xJmZULuJ3fFTq+KF9G1C+oRdBVhPyQIJ
+    -----END SSH SIGNATURE-----
