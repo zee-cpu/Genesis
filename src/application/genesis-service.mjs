@@ -245,14 +245,17 @@ function currentStatus({ projectRoot, businessId, now, registry, approvalVerifie
   };
 }
 
-function guidedApprovalTimes(clock, durationDays) {
-  const issuedAt = clock();
+function approvalTimesFromIssuedAt(issuedAt, durationDays) {
   const durationMs = Math.max(1, Number(durationDays) || 1) * 86_400_000;
   return {
     effective_at: issuedAt.toISOString(),
     expires_at: new Date(issuedAt.getTime() + durationMs).toISOString(),
     review_at: new Date(issuedAt.getTime() + (durationMs / 2)).toISOString(),
   };
+}
+
+function guidedApprovalTimes(clock, durationDays) {
+  return approvalTimesFromIssuedAt(clock(), durationDays);
 }
 
 function reviewTiming({ decision, approval, state, action, now }) {
@@ -1387,6 +1390,9 @@ function approvalRecordProposal(projectRoot, businessId, input, decision, clock,
   const now = clock();
   const issuedAt = now.toISOString();
   const deniedExpiry = new Date(now.getTime() + 7 * 86_400_000).toISOString();
+  const guidedTimes = input.guided === true
+    ? approvalTimesFromIssuedAt(now, experiment.limits?.duration_days)
+    : null;
   const candidate = buildApprovalRecord({
     id,
     affected_business: normalized,
@@ -1410,9 +1416,9 @@ function approvalRecordProposal(projectRoot, businessId, input, decision, clock,
     decision,
     rationale: input.rationale,
     issued_at: issuedAt,
-    effective_at: decision === "approved" ? (input.effective_at || issuedAt) : issuedAt,
-    expires_at: decision === "approved" ? input.expires_at : deniedExpiry,
-    review_at: decision === "approved" ? input.review_at : issuedAt,
+    effective_at: decision === "approved" ? (guidedTimes?.effective_at ?? input.effective_at ?? issuedAt) : issuedAt,
+    expires_at: decision === "approved" ? (guidedTimes?.expires_at ?? input.expires_at) : deniedExpiry,
+    review_at: decision === "approved" ? (guidedTimes?.review_at ?? input.review_at) : issuedAt,
     revoked: false,
     revocation_reference: null,
   }, () => now, { registry });
@@ -1829,6 +1835,9 @@ function decideExperimentProposal(projectRoot, businessId, input, clock, registr
   const approvalId = `${normalized}-experiment-approval`;
   const approvalPath = `records/approvals/${approvalId}.v${String(approvalVersion).padStart(4, "0")}.yaml`;
   const issuedAt = now.toISOString();
+  const guidedTimes = input.guided === true
+    ? approvalTimesFromIssuedAt(now, 7)
+    : null;
   const candidate = buildApprovalRecord({
     id: approvalId,
     affected_business: normalized,
@@ -1861,9 +1870,9 @@ function decideExperimentProposal(projectRoot, businessId, input, clock, registr
     decision: "approved",
     rationale: input.rationale,
     issued_at: issuedAt,
-    effective_at: input.effective_at || issuedAt,
-    expires_at: input.expires_at,
-    review_at: input.review_at,
+    effective_at: guidedTimes?.effective_at ?? input.effective_at ?? issuedAt,
+    expires_at: guidedTimes?.expires_at ?? input.expires_at,
+    review_at: guidedTimes?.review_at ?? input.review_at,
     revoked: false,
     revocation_reference: null,
   }, () => now, { registry });

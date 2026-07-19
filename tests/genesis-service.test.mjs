@@ -532,6 +532,48 @@ await runSection("guidedNextUsesProjectionAndLifecycleState", async () => {
   }
 });
 
+await runSection("guidedApprovalUsesOneSubmissionTimestampWithAdvancingClock", async () => {
+  const projectRoot = makeProjectRoot();
+  let currentTime = Date.parse("2026-07-17T12:00:00Z");
+  const advancingClock = () => {
+    const value = new Date(currentTime);
+    currentTime += 1_000;
+    return value;
+  };
+  try {
+    const service = createGenesisService({
+      projectRoot,
+      repoRoot: ROOT,
+      clock: advancingClock,
+      confirm: async () => true,
+      approvalSigner: testApprovalSigner,
+      approvalVerifier: testApprovalVerifier,
+    });
+    await service.startBusiness(startBusinessInput());
+    await service.planExperiment("bakery", experimentInput());
+
+    const guidance = await service.next("bakery");
+    const approved = await service.approveExperiment("bakery", {
+      ...guidance.defaults,
+      approver_principal_id: "genesis-owner",
+      rationale: "Approve the exact guided envelope using the submission clock.",
+      guided: true,
+    });
+
+    assert.equal(approved.record.issued_at, approved.record.effective_at);
+    assert.equal(
+      Date.parse(approved.record.expires_at) - Date.parse(approved.record.issued_at),
+      7 * 86_400_000,
+    );
+    assert.equal(
+      Date.parse(approved.record.review_at) - Date.parse(approved.record.issued_at),
+      3.5 * 86_400_000,
+    );
+  } finally {
+    cleanupProjectRoot(projectRoot);
+  }
+});
+
 await runSection("failedInitiativeCreatesGovernedLearningLab", async () => {
   const projectRoot = makeProjectRoot();
   try {
