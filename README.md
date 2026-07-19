@@ -429,6 +429,47 @@ genesis plan-experiment bakery --input experiment-proposal.json
 
 `--input <file.json>` removes repetitive field prompts; it does not grant approval, suppress validation, or bypass `[y/N]` confirmation.
 
+### Importing local evidence
+
+Use a small, reviewed JSON summary when evidence already exists locally:
+
+```json
+{
+  "source_reference": "notes://developer-interviews/july-2026",
+  "summary": "Developers report repeated manual validation work when setting up agent configurations.",
+  "stance": "support",
+  "provenance": "Reviewed local interview summary",
+  "privacy_classification": "internal",
+  "observed_at": "2026-07-18T12:00:00Z"
+}
+```
+
+Then run:
+
+```bash
+genesis import-evidence <business-id> --file evidence.json
+```
+
+The importer accepts only regular JSON files up to 256 KiB, public or internal classification, and the fields shown above. It rejects extra fields, symlinks, malformed data, and confidential/restricted material. It treats every imported field, including embedded instructions, as untrusted text and never executes it. Genesis stores the reviewed summary—not a hidden raw-data archive—and adds the source file's SHA-256 digest to provenance before showing the normal immutable-record preview.
+
+### Recording bounded execution
+
+For an active experiment, start with:
+
+```bash
+genesis execution-checklist <business-id>
+```
+
+The checklist restates the approved envelope, stop conditions, factual-log requirement, and the next valid command. It does not authorize or execute work.
+
+You can record a reviewed local execution summary interactively or from a strict JSON file:
+
+```bash
+genesis record-execution <business-id> --execution-file execution.json
+```
+
+The file must include the actor, factual `execution_log`, completion reason, start and completion times, actual cost, actual public/internal data classes, and actual risk level. Genesis adds a SHA-256 attachment marker, then revalidates the signed approval, exact actor, timestamps, cash, labor, duration, data class, and risk before the usual confirmation. It does not archive the raw file or execute its contents.
+
 | Command | Purpose | Writes records? | Expected end state |
 |---|---|---:|---|
 | `genesis identity setup` | Establish the append-only `genesis-owner` SSH trust anchor after showing its fingerprint | Writes an identity event after confirmation | Identity verified |
@@ -442,6 +483,8 @@ genesis plan-experiment bakery --input experiment-proposal.json
 | `genesis start-follow-up <business-id>` | Create a separately governed follow-up after a closed `pivot` or `scale` | Yes, after confirmation | New business in `discover` |
 | `genesis start-learning-lab <business-id>` | Allocate a bounded Learning Lab after a closed, failed initiative classified `learning_lab` | Yes, after confirmation | New business in `discover` |
 | `genesis add-evidence <business-id>` | Add evidence and version the associated decision | Yes, after confirmation | `discover` |
+| `genesis import-evidence <business-id> --file <path>` | Validate and import one local public/internal JSON evidence summary through the normal evidence gate | Yes, after confirmation | `discover` |
+| `genesis execution-checklist <business-id>` | Show a factual, read-only checklist for an active approved experiment | No | Unchanged |
 | `genesis correct-decision <business-id>` | Correct mutable discovery fields by appending a reasoned decision version | Yes, after confirmation | `discover` |
 | `genesis list` | List all projected opportunities with state, next action, review timing, and the first actionable blocker | No | Unchanged |
 | `genesis search <query>` | Search immutable evidence and reviewed experiences by literal keyword, business, stance, or privacy class | No | Unchanged |

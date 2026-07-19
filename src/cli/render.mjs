@@ -349,6 +349,21 @@ export function renderRebuildResult(result) {
   ].join("\n");
 }
 
+export function renderExecutionChecklist(result) {
+  if (!result.active) {
+    return [
+      `Execution checklist unavailable: experiment state is ${result.state}.`,
+      `Next: genesis ${result.next_command}`,
+    ].join("\n");
+  }
+  return [
+    `Execution checklist: ${result.business_id}`,
+    `Metric: ${result.metric.formula}`,
+    "",
+    ...result.items.map((item, index) => `${index + 1}. ${item.label}\n   ${item.detail}`),
+  ].join("\n");
+}
+
 export function renderSyncStatus(result) {
   const lines = [
     "Team sync status",

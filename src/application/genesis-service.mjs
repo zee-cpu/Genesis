@@ -5,6 +5,8 @@ import { actionClassForLimits, evaluateExperimentApproval, evaluateOutcomeApprov
 import { buildApprovalRecord, buildDecisionRecord, buildEvidenceEntry, buildExperienceRecord, buildExperimentRecord, versionApprovalRecord, versionDecisionRecord, versionExperienceRecord, versionExperimentRecord } from "../core/record-builders.mjs";
 import { evaluateDiscoverGate, buildStatus } from "../core/discovery-workflow.mjs";
 import { GenesisError } from "../core/errors.mjs";
+import { readStructuredEvidenceImport } from "../core/evidence-import.mjs";
+import { readStructuredExecutionImport } from "../core/execution-import.mjs";
 import { normalizeBusinessId } from "../core/ids.mjs";
 import { createSchemaRegistry } from "../core/schema-registry.mjs";
 import { signApprovalRecord, verifyApprovalRecord } from "../security/approval-signatures.mjs";
@@ -2241,6 +2243,42 @@ export function createGenesisService({
       return runWithProposal(() => addEvidenceProposal(projectRoot, businessId, input, clock, activeRegistry), "add-evidence");
     },
 
+    async importEvidence(businessId, filePath) {
+      return runWithProposal(
+        () => addEvidenceProposal(projectRoot, businessId, readStructuredEvidenceImport(filePath), clock, activeRegistry),
+        "import-evidence",
+      );
+    },
+
+    async executionChecklist(businessId) {
+      return withWorkspaceLock(projectRoot, async () => {
+        const normalized = normalizeBusinessId(businessId);
+        const { entries, decisionEntries, experimentEntries } = businessEntries(projectRoot, normalized);
+        ensureBusinessExists(decisionEntries, normalized);
+        ensureExperimentExists(experimentEntries);
+        const experiment = latestExperimentEntry(entries).record;
+        const status = currentStatus({ projectRoot, businessId: normalized, now: clock().toISOString(), registry: activeRegistry, approvalVerifier });
+        const active = experiment.status === "active" && status.state === "active";
+        return {
+          business_id: normalized,
+          active,
+          state: status.state,
+          next_command: active ? "record-execution" : status.next_command,
+          limits: experiment.limits,
+          stop_conditions: experiment.stop_conditions,
+          failure_conditions: experiment.failure_conditions,
+          metric: experiment.metric,
+          items: active ? [
+            { id: "approval", label: "Confirm the signed approval is still valid", detail: "Run genesis review-experiment before performing work." },
+            { id: "limits", label: "Stay inside the approved envelope", detail: `Cash $${experiment.limits.cash_usd}; labor ${experiment.limits.labor_hours} hours; duration ${experiment.limits.duration_days} days; data ${experiment.limits.data_classes.join(", ")}; risk ${experiment.limits.risk_level}.` },
+            { id: "stop", label: "Stop when a stop or failure condition occurs", detail: [...experiment.stop_conditions, ...experiment.failure_conditions].join("; ") },
+            { id: "facts", label: "Keep factual execution notes and local evidence references", detail: "Do not add conclusions, approvals, or instructions as execution facts." },
+            { id: "record", label: "Record the completed or stopped execution", detail: "Use genesis record-execution or --execution-file; the approval envelope will be checked again." },
+          ] : [],
+        };
+      });
+    },
+
     async correctDecision(businessId, input) {
       return runWithProposal(
         () => correctDecisionProposal(projectRoot, businessId, input, clock, activeRegistry),
@@ -2310,6 +2348,13 @@ export function createGenesisService({
     async recordExecution(businessId, input) {
       return runWithProposal(
         () => recordExecutionProposal(projectRoot, businessId, input, clock, activeRegistry, approvalVerifier),
+        "record-execution",
+      );
+    },
+
+    async importExecution(businessId, filePath) {
+      return runWithProposal(
+        () => recordExecutionProposal(projectRoot, businessId, readStructuredExecutionImport(filePath), clock, activeRegistry, approvalVerifier),
         "record-execution",
       );
     },

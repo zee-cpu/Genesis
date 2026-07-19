@@ -92,6 +92,10 @@ After a normal Git merge, `genesis sync status` validates event filenames, ident
 
 Filter `genesis list` with `--business`, `--state`, `--blocked`, or `--review`. `genesis search` performs the policy-supported literal keyword and field search over immutable evidence entries and reviewed experiences, with optional `--business`, `--stance`, and `--privacy` filters. Both commands verify SQLite against canonical YAML before returning results and never modify or promote evidence.
 
+`genesis import-evidence <business-id> --file evidence.json` reads one local, regular JSON summary no larger than 256 KiB. It allows only public/internal evidence, rejects unknown fields and symlinks, records a SHA-256 source digest in provenance, and routes the result through the same immutable evidence-plus-decision proposal and confirmation path as `add-evidence`. The file remains untrusted input: Genesis does not execute embedded instructions, infer authority, or store a raw-data archive.
+
+For an active experiment, `genesis execution-checklist <business-id>` is a read-only reminder of the approved envelope, stop/failure conditions, factual evidence requirement, and valid next command. `genesis record-execution <business-id> --execution-file execution.json` accepts one regular JSON summary no larger than 256 KiB with actual actor, execution facts, timestamps, cost, public/internal data classes, and risk. It appends a SHA-256 attachment marker and still revalidates the signed approval and every actual-exposure limit before the normal confirmation. It does not store the raw attachment or execute embedded content.
+
 Operator mistakes are corrected through new versions, never in-place edits. `genesis correct-decision <business-id>` is limited to mutable discovery fields before an experiment exists. `genesis revise-experiment <business-id>` is limited to draft preregistrations and rejects identity, history, lifecycle, execution, and authority fields. An approved draft must have its approval revoked before revision. Every correction stores its reason, corrected fields, and superseded version path.
 
 ## Change workflow

@@ -6,7 +6,7 @@ import { createGenesisService } from "../application/genesis-service.mjs";
 import { suggestionsFor } from "../core/suggestions.mjs";
 import { GenesisError, formatError } from "../core/errors.mjs";
 import { createPrompter } from "./prompter.mjs";
-import { renderApprovalReview, renderBusinessReport, renderCliError, renderEvidenceSearch, renderGuidedApprovalProposal, renderIdentityStatus, renderNextGuidance, renderOpportunityList, renderOutcomeDecisionProposal, renderProposal, renderRebuildResult, renderStatus, renderSyncApplied, renderSyncPrepared, renderSyncStatus, renderWorkspaceVerification } from "./render.mjs";
+import { renderApprovalReview, renderBusinessReport, renderCliError, renderEvidenceSearch, renderExecutionChecklist, renderGuidedApprovalProposal, renderIdentityStatus, renderNextGuidance, renderOpportunityList, renderOutcomeDecisionProposal, renderProposal, renderRebuildResult, renderStatus, renderSyncApplied, renderSyncPrepared, renderSyncStatus, renderWorkspaceVerification } from "./render.mjs";
 import { publicKeyFingerprint, publicKeyFromPrivateKey } from "../security/ssh-signatures.mjs";
 
 const PACKAGE_VERSION = JSON.parse(
@@ -26,6 +26,8 @@ const HELP = [
   "  genesis start-follow-up <business-id>",
   "  genesis start-learning-lab <business-id>",
   "  genesis add-evidence <business-id>",
+  "  genesis import-evidence <business-id> --file <path>",
+  "  genesis execution-checklist <business-id>",
   "  genesis correct-decision <business-id>",
   "  genesis list",
   "  genesis search <query>",
@@ -50,6 +52,8 @@ const HELP = [
   "Options:",
   "  --json              Machine-readable output for list, search, export-report, status, next, review-experiment, or rebuild-index",
   "  --input <file.json> Read proposal fields from JSON; final confirmation is still required",
+  "  --file <path>       Local structured evidence JSON for import-evidence",
+  "  --execution-file <path> Local structured execution JSON for record-execution",
   "  --signing-key <path> SSH private key, or agent-backed .pub key, used for Human Authority",
   "  --business <id>     Filter list or evidence search by business",
   "  --state <state>      Filter opportunity list by lifecycle state",
@@ -68,6 +72,8 @@ function parseCliOptions(values) {
   let json = false;
   let inputPath = null;
   let signingKeyPath = null;
+  let evidenceFilePath = null;
+  let executionFilePath = null;
   const filters = {};
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];
@@ -97,6 +103,26 @@ function parseCliOptions(values) {
           escalation: "human_authority",
         });
       }
+    } else if (value === "--file") {
+      evidenceFilePath = values[index + 1];
+      index += 1;
+      if (!evidenceFilePath) {
+        throw new GenesisError("EVIDENCE_IMPORT_FILE_REQUIRED", "--file requires a local JSON file path", {
+          path: "/file",
+          correction: "Use --file path/to/evidence.json with genesis import-evidence",
+          escalation: "operator",
+        });
+      }
+    } else if (value === "--execution-file") {
+      executionFilePath = values[index + 1];
+      index += 1;
+      if (!executionFilePath) {
+        throw new GenesisError("EXECUTION_IMPORT_FILE_REQUIRED", "--execution-file requires a local JSON file path", {
+          path: "/execution_file",
+          correction: "Use --execution-file path/to/execution.json with genesis record-execution",
+          escalation: "operator",
+        });
+      }
     } else if (value === "--blocked") {
       filters.blocked = true;
     } else if (["--business", "--state", "--review", "--stance", "--privacy"].includes(value)) {
@@ -120,7 +146,7 @@ function parseCliOptions(values) {
       positional.push(value);
     }
   }
-  return { positional, json, inputPath, signingKeyPath, filters };
+  return { positional, json, inputPath, signingKeyPath, evidenceFilePath, executionFilePath, filters };
 }
 
 function readStructuredInput(projectRoot, inputPath) {
@@ -658,7 +684,7 @@ export async function runCli(argv, dependencies = {}) {
       writeLine(output, PACKAGE_VERSION);
       return 0;
     }
-    const jsonCommands = new Set(["list", "search", "export-report", "status", "next", "review-experiment", "rebuild-index", "sync"]);
+    const jsonCommands = new Set(["list", "search", "export-report", "status", "next", "review-experiment", "execution-checklist", "rebuild-index", "sync"]);
     if (options.json && !jsonCommands.has(command)) {
       throw new GenesisError("JSON_OUTPUT_UNSUPPORTED", "JSON output is limited to read-only and rebuild commands", {
         path: "/options/json",
@@ -666,10 +692,31 @@ export async function runCli(argv, dependencies = {}) {
         escalation: "operator",
       });
     }
+    if (options.evidenceFilePath && command !== "import-evidence") {
+      throw new GenesisError("EVIDENCE_IMPORT_OPTION_UNSUPPORTED", "--file is only supported by import-evidence", {
+        path: "/file",
+        correction: "Use genesis import-evidence <business-id> --file path/to/evidence.json",
+        escalation: "operator",
+      });
+    }
+    if (options.executionFilePath && command !== "record-execution") {
+      throw new GenesisError("EXECUTION_IMPORT_OPTION_UNSUPPORTED", "--execution-file is only supported by record-execution", {
+        path: "/execution_file",
+        correction: "Use genesis record-execution <business-id> --execution-file path/to/execution.json",
+        escalation: "operator",
+      });
+    }
     const structuredInput = options.inputPath
       ? readStructuredInput(projectRoot, options.inputPath)
       : null;
-    const inputUnsupportedCommands = new Set(["identity", "verify-workspace", "sync", "list", "search", "export-report", "status", "review-experiment", "rebuild-index"]);
+    if (structuredInput && options.executionFilePath) {
+      throw new GenesisError("EXECUTION_IMPORT_INPUT_CONFLICT", "record-execution accepts either --input or --execution-file, not both", {
+        path: "/execution_file",
+        correction: "Use one reviewed execution source at a time",
+        escalation: "operator",
+      });
+    }
+    const inputUnsupportedCommands = new Set(["identity", "verify-workspace", "sync", "import-evidence", "execution-checklist", "list", "search", "export-report", "status", "review-experiment", "rebuild-index"]);
     if (structuredInput && inputUnsupportedCommands.has(command)) {
       throw new GenesisError("INPUT_FILE_UNSUPPORTED", "This command does not accept proposal input", {
         path: "/options/input",
@@ -800,6 +847,9 @@ export async function runCli(argv, dependencies = {}) {
       }
       const guidance = await service.next(businessId);
       writeLine(output, renderNextGuidance(guidance));
+      if (command === "record-execution" && options.executionFilePath) {
+        writeLine(output, "Local structured execution input is untrusted until the proposed immutable record is reviewed.");
+      }
       const result = await service.startFollowUp(
         businessId,
         structuredInput ?? await gatherFollowUpInput(prompter, guidance),
@@ -839,6 +889,33 @@ export async function runCli(argv, dependencies = {}) {
       }
       writeLine(output, renderStatus(result.status));
       return 0;
+    }
+
+    if (command === "import-evidence") {
+      if (!businessId || !options.evidenceFilePath || structuredInput) {
+        usage(output);
+        return 2;
+      }
+      writeLine(output, "Local structured evidence is untrusted until you review the proposed immutable records.");
+      const result = await service.importEvidence(businessId, options.evidenceFilePath);
+      if (!result.changed) {
+        writeLine(output, "Cancelled.");
+        return 0;
+      }
+      if (result.warning) writeLine(errorOutput, renderCliError(result.warning));
+      writeLine(output, renderStatus(result.status));
+      return 0;
+    }
+
+    if (command === "execution-checklist") {
+      if (!businessId) {
+        usage(output);
+        return 2;
+      }
+      const checklist = await service.executionChecklist(businessId);
+      if (options.json) writeJson(output, checklist);
+      else writeLine(output, renderExecutionChecklist(checklist));
+      return checklist.active ? 0 : 1;
     }
 
     if (command === "correct-decision") {
@@ -1123,7 +1200,9 @@ export async function runCli(argv, dependencies = {}) {
       const guidance = await service.next(businessId);
       writeLine(output, renderNextGuidance(guidance));
       const result = command === "record-execution"
-        ? await service.recordExecution(businessId, structuredInput ?? await gatherExecutionInput(prompter, guidance))
+        ? options.executionFilePath
+          ? await service.importExecution(businessId, options.executionFilePath)
+          : await service.recordExecution(businessId, structuredInput ?? await gatherExecutionInput(prompter, guidance))
         : await service.recordMeasurement(businessId, structuredInput ?? await gatherMeasurementInput(prompter, guidance));
       writeMutationResult(result, output, errorOutput);
       return 0;
