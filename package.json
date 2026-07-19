@@ -53,7 +53,12 @@
     "test": "node --test tests/*.test.mjs",
     "check": "npm run validate && npm test",
     "pack:preview": "npm pack --dry-run",
-    "release:verify": "node scripts/verify-package.mjs"
+    "release:verify": "node scripts/verify-package.mjs",
+    "web:dev": "npm --prefix apps/operator-console run dev",
+    "web:build": "npm --prefix apps/operator-console run build",
+    "web:test": "npm --prefix apps/operator-console test",
+    "web:start": "npm --prefix apps/operator-console run start",
+    "web:seed-demo": "node apps/operator-console/scripts/seed-demo-workspace.mjs"
   },
   "dependencies": {
     "ajv": "8.18.0",

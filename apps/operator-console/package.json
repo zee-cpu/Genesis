@@ -1,0 +1,29 @@
+{
+  "name": "genesis-operator-console",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only local Operator Console for Genesis. Visualization only; the Genesis CLI is the sole mutation engine.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "tsc --noEmit && vite build",
+    "start": "node server/start.mjs",
+    "test": "node --test server/tests/*.test.mjs",
+    "seed-demo": "node scripts/seed-demo-workspace.mjs"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "6.28.0"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "4.3.4",
+    "typescript": "5.6.3",
+    "vite": "5.4.11"
+  }
+}
