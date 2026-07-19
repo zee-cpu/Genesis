@@ -57,6 +57,7 @@
     "web:dev": "npm --prefix apps/operator-console run dev",
     "web:build": "npm --prefix apps/operator-console run build",
     "web:test": "npm --prefix apps/operator-console test",
+    "check:web": "npm run web:test && npm run web:build",
     "web:start": "npm --prefix apps/operator-console run start",
     "web:seed-demo": "node apps/operator-console/scripts/seed-demo-workspace.mjs"
   },
