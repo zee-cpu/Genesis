@@ -192,6 +192,7 @@ test("release-candidate packaging is allowlisted, versioned, and non-publishing"
   assert.equal(packageJson.license, "Apache-2.0");
   assert.equal(packageJson.repository.url, "git+https://github.com/zee-cpu/Genesis.git");
   assert.equal(packageJson.scripts["release:verify"], "node scripts/verify-package.mjs");
+  assert.equal(packageJson.scripts["check:web"], "npm run web:test && npm run web:build");
   for (const required of ["bin/", "src/cli/", "src/security/", "src/sync/", "config/", "schemas/", "templates/", "genesis.yaml", "LICENSE", "NOTICE"]) {
     assert.equal(packageJson.files.includes(required), true, required);
   }
@@ -202,6 +203,8 @@ test("release-candidate packaging is allowlisted, versioned, and non-publishing"
   const workflow = await readFile(path.join(ROOT, ".github", "workflows", "package-genesis.yml"), "utf8");
   assert.match(workflow, /^name: Package Genesis CLI$/m);
   assert.match(workflow, /node scripts\/verify-package\.mjs --output artifacts/);
+  assert.match(workflow, /npm ci --prefix apps\/operator-console/);
+  assert.match(workflow, /npm run check:web/);
   assert.match(workflow, /actions\/upload-artifact@v4/);
   assert.doesNotMatch(workflow, /npm publish/);
 
