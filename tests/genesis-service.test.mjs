@@ -9,6 +9,7 @@ import { listRecords, readRecord, writeRecord } from "../src/storage/yaml-record
 import { workspacePaths } from "../src/storage/workspace.mjs";
 
 import { createGenesisService } from "../src/application/genesis-service.mjs";
+import { testApprovalSigner, testApprovalVerifier } from "./helpers/test-approval-signatures.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const clock = () => new Date("2026-07-17T12:00:00Z");
@@ -182,6 +183,8 @@ function createService(projectRoot, confirm = async () => true) {
     repoRoot: ROOT,
     clock,
     confirm,
+    approvalSigner: testApprovalSigner,
+    approvalVerifier: testApprovalVerifier,
   });
 }
 
@@ -298,6 +301,38 @@ await runSection("searchEvidence", async () => {
     await assert.rejects(
       () => service.searchEvidence("   "),
       (error) => error.code === "SEARCH_QUERY_REQUIRED",
+    );
+  } finally {
+    cleanupProjectRoot(projectRoot);
+  }
+});
+
+await runSection("exportReport", async () => {
+  const projectRoot = makeProjectRoot();
+  try {
+    const service = createService(projectRoot);
+    await service.startBusiness(startBusinessInput());
+    await service.addEvidence("bakery", addEvidenceInput());
+
+    const report = await service.exportReport("bakery");
+    assert.equal(report.report_version, "1.0.0");
+    assert.equal(report.generated_at, "2026-07-17T12:00:00.000Z");
+    assert.equal(report.business_id, "bakery");
+    assert.equal(report.lifecycle.state, "discover");
+    assert.equal(report.lifecycle.projection_consistent, true);
+    assert.equal(report.records.decision.record.target_customer, "Independent bakery owners");
+    assert.equal(report.records.decision.version, 2);
+    assert.equal(report.records.evidence.length, 2);
+    assert.equal(report.records.evidence[0].record.id, "bakery-evidence-001");
+    assert.equal(report.records.experiment, null);
+    assert.equal(report.audit.record_count, 4);
+    assert.deepEqual(report.audit.privacy_classifications, ["internal"]);
+    assert.equal(report.audit.source_paths.length, 4);
+
+    fs.rmSync(workspacePaths(projectRoot).db);
+    await assert.rejects(
+      () => service.exportReport("bakery"),
+      (error) => error.code === "PROJECTION_STALE" && error.path === "/projection",
     );
   } finally {
     cleanupProjectRoot(projectRoot);

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genesis.local/schemas/identity-policy.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "policy_version", "human_authority", "identity_events", "approval_signatures", "enforcement", "limitations"],
+  "properties": {
+    "id": { "const": "identity_policy" },
+    "policy_version": { "const": "2.0.1" },
+    "human_authority": {
+      "type": "object", "additionalProperties": false,
+      "required": ["principal_id", "role", "signature_required"],
+      "properties": {
+        "principal_id": { "const": "genesis-owner" }, "role": { "const": "human_authority" }, "signature_required": { "const": true }
+      }
+    },
+    "identity_events": {
+      "type": "object", "additionalProperties": false,
+      "required": ["storage", "bootstrap", "bootstrap_requires_key_possession", "revocation_requires_active_key_signature", "overwrite_forbidden"],
+      "properties": {
+        "storage": { "const": "append_only_versioned_yaml" }, "bootstrap": { "const": "trust_on_first_use" },
+        "bootstrap_requires_key_possession": { "const": true }, "revocation_requires_active_key_signature": { "const": true },
+        "overwrite_forbidden": { "const": true }
+      }
+    },
+    "approval_signatures": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scheme", "namespace", "canonicalization", "digest_algorithm", "private_key_storage_forbidden"],
+      "properties": {
+        "scheme": { "const": "sshsig" }, "namespace": { "const": "genesis-approval-v1" },
+        "canonicalization": { "const": "RFC8785" }, "digest_algorithm": { "const": "sha256" },
+        "private_key_storage_forbidden": { "const": true }
+      }
+    },
+    "enforcement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["unsigned_legacy_records_readable", "unsigned_legacy_records_can_authorize", "invalid_signature_fails_closed", "revoked_key_fails_closed", "missing_identity_fails_closed"],
+      "properties": {
+        "unsigned_legacy_records_readable": { "const": true }, "unsigned_legacy_records_can_authorize": { "const": false },
+        "invalid_signature_fails_closed": { "const": true }, "revoked_key_fails_closed": { "const": true },
+        "missing_identity_fails_closed": { "const": true }
+      }
+    },
+    "limitations": {
+      "const": [
+        "bootstrap_identity_requires_out_of_band_fingerprint_review",
+        "local_signatures_detect_tampering_but_do_not_prevent_file_deletion",
+        "signed_local_timestamps_are_not_trusted_timestamp_authority_proofs"
+      ]
+    }
+  }
+}

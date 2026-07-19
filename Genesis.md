@@ -1,6 +1,6 @@
 # Genesis Constitution
 
-Policy-Version: 2.0.0
+Policy-Version: 2.0.1
 Authority: Explanatory
 
 ## 1. Status and authority
@@ -19,9 +19,9 @@ Decision-critical precedence is defined in [governance policy](config/governance
 
 ## 4. Human Authority and organization
 
-Human Authority is above the CEO. The sole Human Authority principal is the real human identified as `genesis-owner`; this authority cannot be delegated to an agent or service account. The CEO is accountable to Human Authority. Research, Builder, Operator, and Analyst are accountable through the CEO.
+Human Authority is above the CEO. The sole Human Authority principal is the real human identified as `genesis-owner`; this authority cannot be delegated to an agent or service account. New Human Authority approvals require a valid SSH signature from the active append-only identity key. Text fields, unsigned legacy records, and revoked keys grant no authority. The CEO is accountable to Human Authority. Research, Builder, Operator, and Analyst are accountable through the CEO.
 
-The exact hierarchy and separation of duties are defined by [organization policy](config/organization.yaml). Authority, amendment, exception, and emergency semantics are defined by [governance policy](config/governance.yaml).
+The exact hierarchy and separation of duties are defined by [organization policy](config/organization.yaml). Authority, amendment, exception, and emergency semantics are defined by [governance policy](config/governance.yaml). Canonicalization, SSH signatures, identity bootstrap, revocation, and legacy-record handling are defined by [identity policy](config/identity-policy.yaml).
 
 ## 5. Bounded autonomy and protected actions
 

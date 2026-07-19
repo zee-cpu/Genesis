@@ -58,6 +58,7 @@ export function renderStatus(status) {
     `Approved actor: ${status.approval?.actor ?? "none"}`,
     `Approval expires: ${status.approval?.expires_at ?? "none"}`,
     `Approval valid: ${status.approval_validity ? (status.approval_validity.valid ? "yes" : "no") : "not recorded"}`,
+    `Human Authority signature: ${status.approval_signature_validity ? (status.approval_signature_validity.valid ? "verified" : status.approval_signature_validity.code) : "not recorded"}`,
     `Approval blockers: ${renderList(approvalBlockers.map((item) => item.code))}`,
     `Missing preregistration fields: ${renderList(status.experiment_completeness?.missing)}`,
     "Limits:",
@@ -110,6 +111,156 @@ export function renderEvidenceSearch(result) {
     );
   }
   return lines.join("\n").trimEnd();
+}
+
+function markdownText(value) {
+  return String(value ?? "not recorded")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll(/([\\`*_[\]{}])/g, "\\$1")
+    .replaceAll("|", "\\|")
+    .replaceAll(/\r?\n/g, " ");
+}
+
+function markdownBullets(values) {
+  if (!Array.isArray(values) || values.length === 0) return "- None recorded";
+  return values.map((value) => `- ${markdownText(value)}`).join("\n");
+}
+
+export function renderBusinessReport(report) {
+  const decision = report.records.decision?.record;
+  const experiment = report.records.experiment?.record;
+  const approval = report.records.approval?.record;
+  const experience = report.records.experience?.record;
+  const evidence = report.records.evidence ?? [];
+  const limits = experiment?.limits;
+  const evidenceRows = evidence.length > 0
+    ? evidence.map(({ record }) => (
+        `| ${markdownText(record.stance)} | ${markdownText(record.summary)} | ${markdownText(record.source_reference)} | ${markdownText(record.privacy_classification)} |`
+      )).join("\n")
+    : "| None | No evidence recorded | — | — |";
+
+  return [
+    `# Genesis Business Report: ${report.business_id}`,
+    "",
+    `Generated: ${report.generated_at}`,
+    `Lifecycle state: **${report.lifecycle.state}**`,
+    `Next command: \`genesis ${report.lifecycle.next_command} ${report.business_id}\``,
+    "",
+    "## Opportunity",
+    "",
+    `**Target customer:** ${markdownText(decision?.target_customer ?? "Not recorded")}`,
+    "",
+    `**Problem:** ${markdownText(decision?.problem ?? "Not recorded")}`,
+    "",
+    `**Hypothesis:** ${markdownText(decision?.hypothesis ?? "Not recorded")}`,
+    "",
+    `**Confidence:** ${decision?.confidence ?? "Not recorded"}`,
+    "",
+    `**Expected outcome:** ${markdownText(decision?.expected_outcome ?? "Not recorded")}`,
+    "",
+    `**Primary metric:** ${markdownText(decision?.metric ?? "Not recorded")}`,
+    "",
+    "### Alternatives",
+    "",
+    markdownBullets(decision?.alternatives),
+    "",
+    "## Evidence",
+    "",
+    "| Stance | Summary | Source | Privacy |",
+    "|---|---|---|---|",
+    evidenceRows,
+    "",
+    "## Experiment",
+    "",
+    experiment
+      ? [
+          `**Status:** ${experiment.status}`,
+          "",
+          `**Baseline:** ${markdownText(experiment.baseline)}`,
+          "",
+          `**Comparison:** ${markdownText(experiment.comparison_method)}`,
+          "",
+          `**Success threshold:** ${markdownText(experiment.minimum_meaningful_effect)}`,
+          "",
+          `**Metric formula:** ${markdownText(experiment.metric?.formula ?? "Not recorded")}`,
+        ].join("\n")
+      : "No experiment has been planned.",
+    "",
+    "### Limits",
+    "",
+    limits
+      ? `- Cash: $${limits.cash_usd}\n- Labor: ${limits.labor_hours} hours\n- Duration: ${limits.duration_days} days\n- Data: ${limits.data_classes.join(", ")}\n- Risk: ${limits.risk_level}`
+      : "- No experiment limits recorded",
+    "",
+    "### Result",
+    "",
+    `- Validation outcome: ${experiment?.validation_outcome ?? "pending"}`,
+    `- Actual result: ${markdownText(experiment?.actual_result ?? "Not recorded")}`,
+    `- Decision outcome: ${experiment?.decision_outcome ?? "Not recorded"}`,
+    `- Actual cost: ${experiment?.actual_cost ? `$${experiment.actual_cost.cash_usd}, ${experiment.actual_cost.labor_hours} labor hours` : "Not recorded"}`,
+    "",
+    "## Governance",
+    "",
+    `- Approval decision: ${approval?.decision ?? "Not recorded"}`,
+    `- Approval status: ${approval?.status ?? "Not recorded"}`,
+    `- Approved actor: ${approval?.actor ?? "Not recorded"}`,
+    `- Approval expires: ${approval?.expires_at ?? "Not recorded"}`,
+    `- Approval currently valid: ${report.lifecycle.approval_valid ?? "Not applicable"}`,
+    "",
+    "## Learning",
+    "",
+    `- Reflection: ${markdownText(experience?.reflection ?? experiment?.reflection ?? "Not recorded")}`,
+    `- Reusable lesson: ${markdownText(experience?.reusable_lesson ?? "Not recorded")}`,
+    `- Confidence update: ${experience?.confidence_update ?? experiment?.confidence_update ?? "Not recorded"}`,
+    "",
+    "## Audit trail",
+    "",
+    `- Canonical records: ${report.audit.record_count}`,
+    `- Decision versions: ${report.audit.decision_versions}`,
+    `- Evidence records: ${report.audit.evidence_count}`,
+    `- Experiment versions: ${report.audit.experiment_versions}`,
+    `- Approval versions: ${report.audit.approval_versions}`,
+    `- Experience versions: ${report.audit.experience_versions}`,
+    `- Privacy classifications: ${report.audit.privacy_classifications.join(", ") || "none"}`,
+    `- SQLite projection consistent: ${report.lifecycle.projection_consistent ? "yes" : "no"}`,
+  ].join("\n");
+}
+
+export function renderIdentityStatus(status) {
+  if (!status.configured) {
+    return [
+      "Human Authority identity: not set up",
+      "Next: genesis identity setup",
+      "Genesis will ask you to choose an SSH key and show its fingerprint before saving anything.",
+    ].join("\n");
+  }
+  return [
+    `Human Authority identity: ${status.valid ? "verified" : "not usable"}`,
+    `Principal: ${status.principal_id}`,
+    `Active key: ${status.active_key?.fingerprint ?? "none"}`,
+    `Identity events: ${status.events.length}`,
+    status.blocker ? `Action needed: ${status.blocker.correction}` : "Action needed: none",
+  ].join("\n");
+}
+
+export function renderWorkspaceVerification(result) {
+  const lines = [
+    `Human Authority identity: ${result.identity.valid ? "verified" : "not ready"}`,
+    `Signed approvals verified: ${result.summary.signed_valid}`,
+    `Unsigned legacy approvals: ${result.summary.unsigned_legacy}`,
+    `Invalid signed approvals: ${result.summary.invalid}`,
+    `Ready to authorize new actions: ${result.authorizing_ready ? "yes" : "no"}`,
+  ];
+  const problems = result.approvals.filter((item) => !item.valid);
+  if (problems.length > 0) {
+    lines.push("", "Approval details:");
+    for (const item of problems) {
+      lines.push(`- ${item.path}: ${item.code} — ${item.message}`);
+    }
+  }
+  return lines.join("\n");
 }
 
 export function renderApprovalReview(review) {
@@ -195,6 +346,41 @@ export function renderRebuildResult(result) {
     `Records rebuilt: ${result.recordCount}`,
     `Businesses rebuilt: ${result.businessCount}`,
     `Projection consistent: ${result.projection_consistent ? "yes" : "no"}`,
+  ].join("\n");
+}
+
+export function renderSyncStatus(result) {
+  const lines = [
+    "Team sync status",
+    `Local canonical resources: ${result.local_resources}`,
+    `Content-addressed events: ${result.sync_events}`,
+    `Local resources not prepared: ${result.missing_events}`,
+    `Resources ready to apply: ${result.pending_resources}`,
+    `Conflicts: ${result.conflicts.length}`,
+    `Safe to apply: ${result.ready_to_apply ? "yes" : "no"}`,
+  ];
+  for (const conflict of result.conflicts) {
+    lines.push(`- ${conflict.logical_path}: ${conflict.reason}`);
+  }
+  return lines.join("\n");
+}
+
+export function renderSyncPrepared(result) {
+  return [
+    renderSyncStatus(result),
+    `Events created: ${result.events_created}`,
+    `Git-ready directory: ${result.event_directory}`,
+    "Genesis did not run git, contact a network, or push anything.",
+  ].join("\n");
+}
+
+export function renderSyncApplied(result) {
+  return [
+    renderSyncStatus(result),
+    `Resources applied: ${result.resources_applied}`,
+    `Projection records: ${result.record_count}`,
+    `Projection businesses: ${result.business_count}`,
+    `SQLite projection consistent: ${result.projection_consistent ? "yes" : "no"}`,
   ].join("\n");
 }
 

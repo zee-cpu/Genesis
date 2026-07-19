@@ -16,6 +16,9 @@ export function workspacePaths(projectRoot) {
     experiments: path.join(records, "experiments"),
     experiences: path.join(records, "experiences"),
     evidence: path.join(records, "evidence"),
+    identities: path.join(root, "identities"),
+    sync: path.join(root, "sync"),
+    syncEvents: path.join(root, "sync", "events"),
     db: path.join(root, "genesis.db"),
     lock: path.join(root, "workspace.lock"),
   };
@@ -35,6 +38,9 @@ export function ensureWorkspace(projectRoot) {
   ensureDirectory(paths.experiments);
   ensureDirectory(paths.experiences);
   ensureDirectory(paths.evidence);
+  ensureDirectory(paths.identities);
+  ensureDirectory(paths.sync);
+  ensureDirectory(paths.syncEvents);
   return paths;
 }
 

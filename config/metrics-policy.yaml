@@ -1,5 +1,5 @@
 id: metrics_policy
-policy_version: 2.0.0
+policy_version: 2.0.1
 metrics:
   - id: forecast_calibration
     formula: sum_squared_probability_error_divided_by_resolved_forecasts

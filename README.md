@@ -16,7 +16,7 @@
 
 > Genesis guides one complete governed validation lifecycle: opportunity, evidence, preregistration, Human Authority review, manual activation, execution evidence, measurement, reflection, outcome decision, closure, and separately governed continuation. Every write is shown as a proposal and requires explicit confirmation.
 
-Policy-Version: 2.0.0<br>
+Policy-Version: 2.0.1<br>
 Authority: Explanatory
 
 **Current release status:** Version 2.0.0 is validated, Apache-2.0 licensed, and available as a verified local npm tarball. Public npm publication has not been authorized or performed.
@@ -96,7 +96,7 @@ It also does not currently provide:
 - automatic experiment task execution after the manual `active` transition;
 - automatic reflection, outcome selection, or closure;
 - customer relationship management, outreach, deployment, billing, or production operations; or
-- multi-user synchronization or a hosted database.
+- automatic Git/network operations, automatic semantic conflict resolution, or a hosted database.
 
 The policy layer describes a broader governed business lifecycle. The implemented CLI records one complete governed validation path through closure while keeping the underlying experiment work and any follow-on outcome execution outside the engine.
 
@@ -152,6 +152,7 @@ flowchart TD
 
 - Node.js **22 or newer**
 - npm
+- OpenSSH `ssh-keygen` with `-Y sign` and `-Y verify` support
 - A local filesystem supported by `better-sqlite3`
 
 Check your versions:
@@ -219,6 +220,24 @@ Start your first opportunity:
 ```bash
 genesis start-business
 ```
+
+Before the first Human Authority approval in each workspace, establish the physical signing key:
+
+```bash
+genesis identity setup
+genesis identity status
+```
+
+Genesis shows the SSH fingerprint and asks once before saving the append-only trust anchor. It stores the public key and signed identity events, never the private key.
+
+For a passphrase-protected key, unlock it in your terminal and give Genesis the public-key path:
+
+```bash
+ssh-add ~/.ssh/genesis_owner_ed25519
+genesis identity setup --signing-key ~/.ssh/genesis_owner_ed25519.pub
+```
+
+See [Cryptographic Human Authority](docs/security/cryptographic-identity.md) for the threat model, revocation behavior, compatibility rules, and trust boundary.
 
 The CLI asks questions, prints the complete proposed records, and finishes with:
 
@@ -353,7 +372,7 @@ To deny instead:
 genesis deny-experiment bakery
 ```
 
-Genesis asks for the approver principal, requester, rationale, and exact confirmation. The approver must be the configured Human Authority, `genesis-owner`, and cannot also be the requester. Approval creates an immutable record such as:
+Genesis asks for the approver principal, requester, rationale, SSH signing key, and exact confirmation. The approver must be the configured Human Authority, `genesis-owner`, cannot also be the requester, and must prove control of the active identity key. Approval creates an immutable signed record such as:
 
 ```text
 .genesis/records/approvals/bakery-experiment-approval.v0001.yaml
@@ -395,6 +414,7 @@ Read-only operator commands support machine-readable output:
 ```bash
 genesis list --json
 genesis search "customer phrase" --business bakery --stance contradict --json
+genesis export-report bakery --json
 genesis status bakery --json
 genesis next bakery --json
 genesis review-experiment bakery --json
@@ -411,6 +431,13 @@ genesis plan-experiment bakery --input experiment-proposal.json
 
 | Command | Purpose | Writes records? | Expected end state |
 |---|---|---:|---|
+| `genesis identity setup` | Establish the append-only `genesis-owner` SSH trust anchor after showing its fingerprint | Writes an identity event after confirmation | Identity verified |
+| `genesis identity status` | Verify the current Human Authority identity chain and active key | No | Unchanged |
+| `genesis identity revoke` | Sign and append revocation of the active Human Authority key | Writes an identity event after confirmation | New approvals blocked |
+| `genesis verify-workspace` | Verify identity history and every runtime approval signature | No | Unchanged |
+| `genesis sync status` | Inspect local records, prepared events, incoming resources, and conflicts | No | Unchanged |
+| `genesis sync prepare` | Create deterministic content-addressed events for local records and identities | Derived events, after confirmation | Git-ready |
+| `genesis sync apply` | Validate the merged event set, materialize unambiguous resources, and rebuild SQLite | Missing canonical resources, after confirmation | Converged or blocked |
 | `genesis start-business` | Create an opportunity, its first decision, and initial evidence | Yes, after confirmation | `discover` |
 | `genesis start-follow-up <business-id>` | Create a separately governed follow-up after a closed `pivot` or `scale` | Yes, after confirmation | New business in `discover` |
 | `genesis start-learning-lab <business-id>` | Allocate a bounded Learning Lab after a closed, failed initiative classified `learning_lab` | Yes, after confirmation | New business in `discover` |
@@ -418,6 +445,7 @@ genesis plan-experiment bakery --input experiment-proposal.json
 | `genesis correct-decision <business-id>` | Correct mutable discovery fields by appending a reasoned decision version | Yes, after confirmation | `discover` |
 | `genesis list` | List all projected opportunities with state, next action, review timing, and the first actionable blocker | No | Unchanged |
 | `genesis search <query>` | Search immutable evidence and reviewed experiences by literal keyword, business, stance, or privacy class | No | Unchanged |
+| `genesis export-report <business-id>` | Export a customer-readable Markdown report or a structured JSON lifecycle snapshot | No | Unchanged |
 | `genesis status <business-id>` | Show state, gates, metrics, limits, blocked commands, and projection health | No | Unchanged |
 | `genesis next <business-id>` | Explain the projected state and guide the next valid transition one question at a time | Only when the guided proposal is confirmed | Depends on current state |
 | `genesis plan-experiment <business-id>` | Create a complete validation-experiment preregistration | Yes, after confirmation | `approval_pending` |
@@ -449,6 +477,8 @@ Genesis creates this structure in the directory where you run it:
 
 ```text
 .genesis/
+├── identities/
+│   └── genesis-owner-identity.v0001.yaml
 ├── records/
 │   ├── decisions/
 │   │   └── <decision-id>.v0001.yaml
@@ -461,6 +491,8 @@ Genesis creates this structure in the directory where you run it:
 │   └── approvals/
 │       └── <approval-id>.v0001.yaml
 ├── .transactions/        # transient crash-recovery journals, normally empty
+├── sync/
+│   └── events/           # Git-trackable content-addressed event set
 ├── genesis.db
 └── workspace.lock        # exists only while an operation is active
 ```
@@ -490,6 +522,31 @@ Do not edit historical records to change what happened. Create a new version or 
 
 SQLite is **not** authoritative. If projection fails after YAML is safely written, Genesis reports `PROJECTION_STALE`; the data remains recoverable with `genesis rebuild-index`.
 
+### Conflict-safe team sync
+
+Genesis synchronizes data, not Git credentials or network access. The shared directory is a grow-only, content-addressed event set—a G-Set CRDT—under `.genesis/sync/events/`. Each event embeds one schema-valid canonical record or signed identity event. Its filename, event identifier, logical path, and payload digest must all agree.
+
+Before committing local changes:
+
+```bash
+genesis sync status
+genesis sync prepare
+git add .genesis/sync/events
+git commit -m "sync Genesis records"
+```
+
+After using your normal Git workflow to pull or merge another teammate's events:
+
+```bash
+genesis sync status
+genesis sync apply
+genesis verify-workspace
+```
+
+`sync prepare` and `sync apply` each show one direct confirmation. Genesis never runs `git`, contacts a remote, or pushes for you. `sync apply` first validates every event, reconstructs the merged view in a temporary workspace, verifies identity history and signed approvals, and proves that SQLite can be rebuilt. Only then does it install missing canonical YAML with no-replace semantics and rebuild the local projection.
+
+Events with different identifiers merge by set union. If two peers create different payloads for the same immutable logical version, both events are preserved and Genesis reports `SYNC_CONFLICT`; neither payload is selected automatically. Stop and request a separate Human Authority reconciliation decision—automated conflict resolution is intentionally outside this milestone. Sync events contain the complete record payload, including its privacy classification, so review data scope before committing them to any repository.
+
 ### Workspace locking
 
 Genesis creates `.genesis/workspace.lock` with exclusive creation while it reads or writes the workspace. A competing operation fails with `WORKSPACE_LOCKED`, preventing concurrent local commands from racing. If a terminated process leaves a well-formed lock behind, Genesis verifies that the recorded PID is no longer active and reclaims the lock automatically. Ambiguous locks fail closed for manual inspection.
@@ -516,6 +573,15 @@ Genesis creates `.genesis/workspace.lock` with exclusive creation while it reads
 
 Filter the operator inbox with `--business <id>`, `--state <state>`, `--blocked`, or `--review due|overdue|upcoming|none`. Evidence search uses literal case-insensitive matching over evidence entries and reviewed experiences; narrow it with `--business`, `--stance support|contradict`, or `--privacy public|internal|confidential|restricted`. Search never promotes a lesson or changes evidence quality.
 
+`genesis export-report <business-id>` assembles the latest opportunity, evidence, experiment, approval, result, learning, and audit trail without changing any record. It fails closed when SQLite does not match canonical YAML. Markdown is written to standard output by default, so the operator chooses whether and where to save it; `--json` exposes the same versioned report model for integrations and a future web interface.
+
+```bash
+genesis export-report bakery > bakery-report.md
+genesis export-report bakery --json > bakery-report.json
+```
+
+Reports retain the source records' privacy classifications and may contain internal or confidential material. Exporting a report does not authorize publishing or sharing it.
+
 These are early workflow metrics, not proof that a business is viable. The broader normative metric definitions live in [`config/metrics-policy.yaml`](config/metrics-policy.yaml).
 
 ## Safety, authority, and privacy
@@ -523,6 +589,7 @@ These are early workflow metrics, not proof that a business is viable. The broad
 Genesis is governed by default-deny policy:
 
 - **No inferred approval.** Silence, previous behavior, authorship, and a completed proposal do not grant authority.
+- **Physical-key authority.** New Human Authority decisions require an SSH signature from the active `genesis-owner` identity key; unsigned legacy approvals cannot authorize transitions.
 - **Proposal is not execution.** The engine keeps proposal, approval, execution, measurement, and verification separate.
 - **Protected actions stop.** Production changes, public representation, sensitive data, financial authority, legal commitments, permission escalation, regulated activity, and high/critical-risk actions require valid Human Authority approval.
 - **Evidence keeps provenance.** Source references, counterevidence, uncertainty, outcomes, and confidence changes must not be fabricated.
@@ -611,6 +678,8 @@ Genesis/
 │   ├── cli/                     prompts, rendering, command dispatch
 │   ├── application/             workflow orchestration service
 │   ├── core/                    gates, records, metrics, IDs, errors
+│   ├── security/                canonicalization, SSH identity, signatures
+│   ├── sync/                    content-addressed events and safe reconciliation
 │   └── storage/                 YAML store, SQLite projection, locking
 ├── config/                      normative governance and workflow policy
 │   └── workflows/               business and experiment state machines
@@ -653,6 +722,7 @@ graph TD
 | `src/core/schema-registry.mjs` | Loads registered schemas and performs strict runtime validation |
 | `src/storage/yaml-record-store.mjs` | Performs append-only, atomic batch persistence and interrupted-transaction recovery |
 | `src/storage/projection.mjs` | Creates, updates, checks, and rebuilds the SQLite projection |
+| `src/sync/sync-store.mjs` | Prepares the grow-only event set, detects divergence, validates merged state, and safely materializes incoming resources |
 | `scripts/validate-genesis.mjs` | Validates the normative manifest, schemas, references, documents, and cross-file invariants |
 
 ## Policy and record model
@@ -739,16 +809,18 @@ Genesis 2.0 is a complete governed validation CLI and a practical foundation for
 Current technical boundaries include:
 
 - structured input is JSON-file based and still requires interactive confirmation; there is no unattended approval mode;
-- one local operator and one process per workspace operation;
+- one process per local workspace operation; peers exchange events through an operator-managed Git workflow;
 - corrections are intentionally limited to discovery decisions and draft experiments; evidence and active/completed lifecycle records remain immutable;
-- terminal-driven review only; no web approval inbox, authentication, signatures, or cryptographic identity proof;
-- operator identities are locally entered and type-checked, so filesystem access remains part of the trust boundary;
+- terminal-driven review only; Human Authority is SSH-verified, but other operator roles are still locally entered and type-checked;
+- the initial key bootstrap is trust-on-first-use and requires out-of-band fingerprint review for shared workspaces;
+- signatures detect record modification but cannot prevent deletion by a fully compromised local account, and local timestamps are not trusted timestamp-authority proofs;
 - the `active` transition records authorization state but does not run experiment tasks;
 - execution and measurement are operator-entered evidence; Genesis does not infer or fabricate results;
 - an approved `scale`, `pivot`, or other outcome is a classification decision only; it grants no permission to execute follow-on work;
 - generic follow-up is limited to closed `pivot` and `scale` outcomes; Learning Lab continuation is limited to a real failed initiative and must fit its separately recorded budget, owner, metric, monthly review, and expiry;
 - no automatic metric ingestion from customer or operating systems;
-- no authentication, encryption layer, remote backup, or sync;
+- sync transport is operator-managed Git: Genesis does not encrypt events, authenticate Git users, manage remotes, push, pull, or back up repositories;
+- concurrent edits to the same immutable logical version deliberately require Human Authority resolution rather than automatic winner selection;
 - an installable Apache-2.0 release-candidate tarball is verified locally, but public npm publication remains pending explicit Human Authority approval; and
 - no full autonomous business execution.
 
@@ -760,8 +832,8 @@ The current engine is ready for local, controlled use across one complete govern
 
 1. **Customer-reality integrations:** import approved evidence without granting retrieved content authority.
 2. **Public release authorization:** authorize the exact package, registry, version, actor, and publication window before enabling npm publication.
-3. **Identity and access (deferred):** authenticate operators and bind Human Authority actions to verifiable identities before any hosted or multi-user use.
-4. **Web control interface (paused):** expose the same backend gates through a local UI only when the operator workflow is mature enough to justify it.
+3. **Broader operator identity:** extend verified identity beyond Human Authority before any hosted or multi-user use.
+4. **Read-only web control interface (paused):** visualize the same signed and synchronized backend state locally.
 
 The guiding rule is simple: automate only what has been understood manually, and measure success through better external decisions—not more internal artifacts.
 

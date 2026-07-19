@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -89,6 +90,45 @@ function createScriptedPrompter(answers, output) {
 function runOutput(text) {
   return text.replaceAll("\r\n", "\n");
 }
+
+test("CLI guides Human Authority identity setup, verification, and revocation", { concurrency: false }, async () => {
+  const projectRoot = makeProjectRoot();
+  const keyPath = path.join(projectRoot, "human-authority-key");
+  const generated = spawnSync("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", keyPath], { encoding: "utf8" });
+  assert.equal(generated.status, 0, generated.stderr);
+  try {
+    const before = createBuffer();
+    assert.equal(await runCli(["identity", "status"], {
+      projectRoot, repoRoot: ROOT, clock: CLOCK, output: before, errorOutput: before,
+      prompter: createScriptedPrompter([], before),
+    }), 0);
+    assert.match(before.toString(), /Human Authority identity: not set up/);
+
+    const setup = createBuffer();
+    assert.equal(await runCli(["identity", "setup", "--signing-key", keyPath], {
+      projectRoot, repoRoot: ROOT, clock: CLOCK, output: setup, errorOutput: setup,
+      prompter: createScriptedPrompter(["y"], setup),
+    }), 0);
+    assert.match(setup.toString(), /Use this physical key for Human Authority/);
+    assert.match(setup.toString(), /identity verified and saved/);
+
+    const verify = createBuffer();
+    assert.equal(await runCli(["verify-workspace"], {
+      projectRoot, repoRoot: ROOT, clock: CLOCK, output: verify, errorOutput: verify,
+      prompter: createScriptedPrompter([], verify),
+    }), 0);
+    assert.match(verify.toString(), /Ready to authorize new actions: yes/);
+
+    const revoke = createBuffer();
+    assert.equal(await runCli(["identity", "revoke", "--signing-key", keyPath], {
+      projectRoot, repoRoot: ROOT, clock: CLOCK, output: revoke, errorOutput: revoke,
+      prompter: createScriptedPrompter(["Hardware key retired", "y"], revoke),
+    }), 0);
+    assert.match(revoke.toString(), /New approvals are blocked/);
+  } finally {
+    cleanupProjectRoot(projectRoot);
+  }
+});
 
 test("CLI runs start-business, add-evidence, status, plan-experiment, and rebuild-index", { concurrency: false }, async () => {
   const projectRoot = makeProjectRoot();
@@ -248,7 +288,7 @@ test("CLI accepts JSON proposal input and emits clean JSON read output", { concu
     hypothesis: "A clearer view reduces reconciliation time",
     confidence: 0.55,
     source_reference: "interview://structured-owner-1",
-    summary: "The owner reports two hours of weekly reconciliation",
+    summary: "The owner reports two hours of weekly reconciliation <img src=x> | untrusted",
     stance: "support",
     provenance: "Operator-entered interview note",
     privacy_classification: "internal",
@@ -304,6 +344,38 @@ test("CLI accepts JSON proposal input and emits clean JSON read output", { concu
     assert.equal(search.count, 1);
     assert.equal(search.results[0].business_id, "structured-bakery");
     assert.equal(search.results[0].stance, "support");
+
+    const reportJsonOutput = createBuffer();
+    const reportJsonExit = await runCli(["export-report", "structured-bakery", "--json"], {
+      projectRoot,
+      repoRoot: ROOT,
+      clock: CLOCK,
+      prompter: createScriptedPrompter([], reportJsonOutput),
+      output: reportJsonOutput,
+      errorOutput: reportJsonOutput,
+    });
+    assert.equal(reportJsonExit, 0);
+    const report = JSON.parse(reportJsonOutput.toString());
+    assert.equal(report.business_id, "structured-bakery");
+    assert.equal(report.records.evidence.length, 1);
+    assert.equal(report.lifecycle.state, "discover");
+
+    const reportMarkdownOutput = createBuffer();
+    const reportMarkdownExit = await runCli(["export-report", "structured-bakery"], {
+      projectRoot,
+      repoRoot: ROOT,
+      clock: CLOCK,
+      prompter: createScriptedPrompter([], reportMarkdownOutput),
+      output: reportMarkdownOutput,
+      errorOutput: reportMarkdownOutput,
+    });
+    assert.equal(reportMarkdownExit, 0);
+    assert.equal(reportMarkdownOutput.toString().includes("# Genesis Business Report: structured-bakery"), true);
+    assert.equal(reportMarkdownOutput.toString().includes("## Evidence"), true);
+    assert.equal(reportMarkdownOutput.toString().includes("SQLite projection consistent: yes"), true);
+    assert.equal(reportMarkdownOutput.toString().includes("&lt;img src=x&gt;"), true);
+    assert.equal(reportMarkdownOutput.toString().includes("\\| untrusted"), true);
+    assert.equal(reportMarkdownOutput.toString().includes("<img src=x>"), false);
   } finally {
     cleanupProjectRoot(projectRoot);
   }
@@ -410,14 +482,14 @@ test("CLI dispatches Human review, approval, denial, start, and revocation comma
       projectRoot, repoRoot: ROOT, output, errorOutput: output, service,
       prompter: createScriptedPrompter([], output),
     }), 0);
-    assert.equal(await runCli(["approve-experiment", "bakery"], {
+    assert.equal(await runCli(["approve-experiment", "bakery", "--signing-key", "/tmp/test-signing-key"], {
       projectRoot, repoRoot: ROOT, output, errorOutput: output, service,
       prompter: createScriptedPrompter([
         "genesis-owner", "research", "Approved rationale",
         "2026-07-17T12:00:00Z", "2026-07-24T12:00:00Z", "2026-07-20T12:00:00Z",
       ], output),
     }), 0);
-    assert.equal(await runCli(["deny-experiment", "bakery"], {
+    assert.equal(await runCli(["deny-experiment", "bakery", "--signing-key", "/tmp/test-signing-key"], {
       projectRoot, repoRoot: ROOT, output, errorOutput: output, service,
       prompter: createScriptedPrompter(["genesis-owner", "research", "Denied rationale"], output),
     }), 0);
@@ -425,7 +497,7 @@ test("CLI dispatches Human review, approval, denial, start, and revocation comma
       projectRoot, repoRoot: ROOT, output, errorOutput: output, service,
       prompter: createScriptedPrompter(["research"], output),
     }), 0);
-    assert.equal(await runCli(["revoke-approval", "bakery"], {
+    assert.equal(await runCli(["revoke-approval", "bakery", "--signing-key", "/tmp/test-signing-key"], {
       projectRoot, repoRoot: ROOT, output, errorOutput: output, service,
       prompter: createScriptedPrompter(["genesis-owner", "Revoked rationale"], output),
     }), 0);
@@ -446,12 +518,16 @@ test("guided next progresses from discovery through governed experiment closure"
   const projectRoot = makeProjectRoot();
   const output = createBuffer();
   try {
+    const signingKeyPath = path.join(projectRoot, "human-authority-key");
+    const generatedKey = spawnSync("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", signingKeyPath], { encoding: "utf8" });
+    assert.equal(generatedKey.status, 0, generatedKey.stderr);
     const setup = createGenesisService({
       projectRoot,
       repoRoot: ROOT,
       clock: CLOCK,
       confirm: async () => true,
     });
+    await setup.setupIdentity({ signing_key_path: signingKeyPath });
     await setup.startBusiness({
       business_id: "bakery",
       owner: "research",
@@ -508,10 +584,15 @@ test("guided next progresses from discovery through governed experiment closure"
       prompter: createScriptedPrompter([
         "1",
         "The bounded experiment is ready for manual execution.",
+        signingKeyPath,
         "y",
       ], output),
     }), 0);
     assert.equal((await setup.status("bakery")).state, "approved");
+    const signedReview = await setup.reviewExperiment("bakery");
+    assert.equal(signedReview.approval_validity.valid, true);
+    assert.equal(signedReview.approval.signature.principal_id, "genesis-owner");
+    assert.equal(signedReview.approval.signature.namespace, "genesis-approval-v1");
 
     assert.equal(await runCli(["next", "bakery"], {
       projectRoot,
@@ -596,6 +677,7 @@ test("guided next progresses from discovery through governed experiment closure"
         "No constitutional conflict; classification and closure only",
         "Supporting and contradicting evidence were reviewed",
         "Pivot to a larger bounded validation",
+        signingKeyPath,
         "y",
       ], output),
     }), 0);

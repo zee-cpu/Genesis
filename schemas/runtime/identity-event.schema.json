@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genesis.local/schemas/runtime/identity-event.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "record_type", "schema_version", "version", "principal_id", "role", "action", "created_at", "previous_event_digest", "key", "reason", "signature"],
+  "properties": {
+    "id": { "const": "genesis-owner-identity" },
+    "record_type": { "const": "identity_event" },
+    "schema_version": { "const": "1.0.0" },
+    "version": { "type": "integer", "minimum": 1 },
+    "principal_id": { "const": "genesis-owner" },
+    "role": { "const": "human_authority" },
+    "action": { "enum": ["bootstrap", "revoke"] },
+    "created_at": { "type": "string", "format": "date-time" },
+    "previous_event_digest": { "type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$" },
+    "key": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fingerprint", "public_key"],
+      "properties": {
+        "fingerprint": { "type": "string", "pattern": "^SHA256:[A-Za-z0-9+/]+$" },
+        "public_key": { "type": "string", "pattern": "^(?:ssh-|sk-)[A-Za-z0-9@._-]+ [A-Za-z0-9+/=]+$" }
+      }
+    },
+    "reason": { "type": ["string", "null"], "minLength": 1 },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scheme", "namespace", "canonicalization", "digest_algorithm", "payload_digest", "principal_id", "key_fingerprint", "signed_at", "signature"],
+      "properties": {
+        "scheme": { "const": "sshsig" },
+        "namespace": { "const": "genesis-identity-v1" },
+        "canonicalization": { "const": "RFC8785" },
+        "digest_algorithm": { "const": "sha256" },
+        "payload_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "principal_id": { "const": "genesis-owner" },
+        "key_fingerprint": { "type": "string", "pattern": "^SHA256:[A-Za-z0-9+/]+$" },
+        "signed_at": { "type": "string", "format": "date-time" },
+        "signature": { "type": "string", "pattern": "^-----BEGIN SSH SIGNATURE-----[\\s\\S]+-----END SSH SIGNATURE-----$" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "action": { "const": "bootstrap" } }, "required": ["action"] },
+      "then": { "properties": { "version": { "type": "integer", "const": 1 }, "previous_event_digest": { "type": "null" }, "reason": { "type": "null" } } }
+    },
+    {
+      "if": { "properties": { "action": { "const": "revoke" } }, "required": ["action"] },
+      "then": { "properties": { "version": { "type": "integer", "minimum": 2 }, "previous_event_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }, "reason": { "type": "string", "minLength": 1 } } }
+    }
+  ]
+}

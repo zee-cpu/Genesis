@@ -63,6 +63,10 @@ export function createSchemaRegistry(repoRoot) {
 
   const evidencePath = resolveInsideRepo(root, "schemas/runtime/evidence-entry.schema.json");
   const evidenceValidator = ajv.compile(JSON.parse(fs.readFileSync(evidencePath, "utf8")));
+  const identityPath = resolveInsideRepo(root, "schemas/runtime/identity-event.schema.json");
+  const identityValidator = ajv.compile(JSON.parse(fs.readFileSync(identityPath, "utf8")));
+  const syncEventPath = resolveInsideRepo(root, "schemas/runtime/sync-event.schema.json");
+  const syncEventValidator = ajv.compile(JSON.parse(fs.readFileSync(syncEventPath, "utf8")));
 
   function validate(validator, value) {
     if (!validator || !validator(value)) {
@@ -80,6 +84,12 @@ export function createSchemaRegistry(repoRoot) {
     },
     validateEvidence(value) {
       return validate(evidenceValidator, value);
+    },
+    validateIdentityEvent(value) {
+      return validate(identityValidator, value);
+    },
+    validateSyncEvent(value) {
+      return validate(syncEventValidator, value);
     },
   });
 }

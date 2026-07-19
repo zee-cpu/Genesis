@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genesis.local/schemas/runtime/sync-event.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "record_type", "schema_version", "resource_type", "kind", "resource_id", "version", "logical_path", "content_digest", "payload"],
+  "properties": {
+    "event_id": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "record_type": { "const": "sync_event" },
+    "schema_version": { "const": "1.0.0" },
+    "resource_type": { "enum": ["record", "identity"] },
+    "kind": { "type": ["string", "null"], "enum": ["approval", "decision", "experiment", "experience", "evidence", null] },
+    "resource_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "version": { "type": "integer", "minimum": 1 },
+    "logical_path": { "type": "string", "pattern": "^\\.genesis/(?:records/(?:approvals|decisions|experiments|experiences|evidence)/[a-z0-9][a-z0-9-]*\\.v[0-9]{4}\\.yaml|identities/genesis-owner-identity\\.v[0-9]{4}\\.yaml)$" },
+    "content_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "payload": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "resource_type": { "const": "record" } }, "required": ["resource_type"] },
+      "then": { "properties": { "kind": { "enum": ["approval", "decision", "experiment", "experience", "evidence"] } } }
+    },
+    {
+      "if": { "properties": { "resource_type": { "const": "identity" } }, "required": ["resource_type"] },
+      "then": { "properties": { "kind": { "type": "null" }, "resource_id": { "const": "genesis-owner-identity" } } }
+    }
+  ]
+}

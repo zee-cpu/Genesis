@@ -5,7 +5,7 @@
   "required": ["id", "record_type", "schema_version", "policy_version", "created_at", "updated_at", "owner", "affected_business", "status", "evidence_references", "related_records", "privacy_classification", "immutable_history_refs", "subtype", "validation_outcome", "problem", "supported_decision", "hypothesis", "confidence", "evidence", "counterevidence", "baseline", "comparison_method", "metric", "expected_outcome", "minimum_meaningful_effect", "failure_conditions", "stop_conditions", "limits", "decision_date", "allowed_outcomes", "approval_references"],
   "properties": {
     "id": { "$ref": "#/$defs/id" }, "record_type": { "const": "experiment_record" },
-    "schema_version": { "$ref": "#/$defs/semver" }, "policy_version": { "const": "2.0.0" },
+    "schema_version": { "$ref": "#/$defs/semver" }, "policy_version": { "enum": ["2.0.0", "2.0.1"] },
     "created_at": { "$ref": "#/$defs/dateTime" }, "updated_at": { "$ref": "#/$defs/dateTime" },
     "owner": { "$ref": "#/$defs/nonempty" }, "affected_business": { "$ref": "#/$defs/nonempty" },
     "status": { "enum": ["draft", "active", "measurement", "reflection", "decision", "outcome_approved", "closed", "superseded"] },

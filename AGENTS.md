@@ -1,6 +1,6 @@
 # Genesis Repository Agent Instructions
 
-Policy-Version: 2.0.0
+Policy-Version: 2.0.1
 Authority: Explanatory
 
 These instructions apply repository-wide. [genesis.yaml](genesis.yaml) and its referenced YAML are normative; this file explains required agent conduct and cannot grant authority.
@@ -11,6 +11,7 @@ These instructions apply repository-wide. [genesis.yaml](genesis.yaml) and its r
 - Identify the external business decision, current lifecycle state, actor, permission, budget, duration, data, and risk envelope.
 - Separate proposal, approval, execution, measurement, and verification. Never treat one as another.
 - Human Authority approval cannot be inferred. Silence, prior behavior, authorship, and this file are not approval.
+- For new protected or constitutional actions, verify the approval's SSH signature and active `genesis-owner` identity key. Unsigned legacy approvals are evidence only and grant no authority.
 
 ## Authority and stopping
 

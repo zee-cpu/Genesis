@@ -6,7 +6,8 @@ import { createGenesisService } from "../application/genesis-service.mjs";
 import { suggestionsFor } from "../core/suggestions.mjs";
 import { GenesisError, formatError } from "../core/errors.mjs";
 import { createPrompter } from "./prompter.mjs";
-import { renderApprovalReview, renderCliError, renderEvidenceSearch, renderGuidedApprovalProposal, renderNextGuidance, renderOpportunityList, renderOutcomeDecisionProposal, renderProposal, renderRebuildResult, renderStatus } from "./render.mjs";
+import { renderApprovalReview, renderBusinessReport, renderCliError, renderEvidenceSearch, renderGuidedApprovalProposal, renderIdentityStatus, renderNextGuidance, renderOpportunityList, renderOutcomeDecisionProposal, renderProposal, renderRebuildResult, renderStatus, renderSyncApplied, renderSyncPrepared, renderSyncStatus, renderWorkspaceVerification } from "./render.mjs";
+import { publicKeyFingerprint, publicKeyFromPrivateKey } from "../security/ssh-signatures.mjs";
 
 const PACKAGE_VERSION = JSON.parse(
   fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
@@ -15,12 +16,20 @@ const PACKAGE_VERSION = JSON.parse(
 const HELP = [
   "Usage:",
   "  genesis start-business",
+  "  genesis identity setup",
+  "  genesis identity status",
+  "  genesis identity revoke",
+  "  genesis verify-workspace",
+  "  genesis sync status",
+  "  genesis sync prepare",
+  "  genesis sync apply",
   "  genesis start-follow-up <business-id>",
   "  genesis start-learning-lab <business-id>",
   "  genesis add-evidence <business-id>",
   "  genesis correct-decision <business-id>",
   "  genesis list",
   "  genesis search <query>",
+  "  genesis export-report <business-id>",
   "  genesis status <business-id>",
   "  genesis next <business-id>",
   "  genesis plan-experiment <business-id>",
@@ -39,8 +48,9 @@ const HELP = [
   "  genesis --version",
   "",
   "Options:",
-  "  --json              Machine-readable output for list, search, status, next, review-experiment, or rebuild-index",
+  "  --json              Machine-readable output for list, search, export-report, status, next, review-experiment, or rebuild-index",
   "  --input <file.json> Read proposal fields from JSON; final confirmation is still required",
+  "  --signing-key <path> SSH private key, or agent-backed .pub key, used for Human Authority",
   "  --business <id>     Filter list or evidence search by business",
   "  --state <state>      Filter opportunity list by lifecycle state",
   "  --blocked            Show only opportunities with an actionable blocker",
@@ -57,6 +67,7 @@ function parseCliOptions(values) {
   const positional = [];
   let json = false;
   let inputPath = null;
+  let signingKeyPath = null;
   const filters = {};
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];
@@ -74,6 +85,16 @@ function parseCliOptions(values) {
           path: "/input",
           correction: "Use --input path/to/proposal.json",
           escalation: "operator",
+        });
+      }
+    } else if (value === "--signing-key") {
+      signingKeyPath = values[index + 1];
+      index += 1;
+      if (!signingKeyPath) {
+        throw new GenesisError("SIGNING_KEY_REQUIRED", "--signing-key requires a path", {
+          path: "/signing_key",
+          correction: "Provide an SSH private key, or a .pub key whose private half is loaded in ssh-agent",
+          escalation: "human_authority",
         });
       }
     } else if (value === "--blocked") {
@@ -99,7 +120,7 @@ function parseCliOptions(values) {
       positional.push(value);
     }
   }
-  return { positional, json, inputPath, filters };
+  return { positional, json, inputPath, signingKeyPath, filters };
 }
 
 function readStructuredInput(projectRoot, inputPath) {
@@ -165,6 +186,12 @@ async function askRequired(prompter, question, fallback = "") {
     const answer = (await prompter.ask(question)).trim() || fallback;
     if (answer) return answer;
   }
+}
+
+async function signingKeyPath(options, structuredInput, prompter) {
+  return options.signingKeyPath
+    ?? structuredInput?.signing_key_path
+    ?? await askRequired(prompter, "Human Authority SSH signing key path: ");
 }
 
 async function askGuidedNumber(prompter, question, { fallback = 0, integer = false, minimum = 0, maximum = Number.POSITIVE_INFINITY } = {}) {
@@ -615,6 +642,8 @@ export async function runCli(argv, dependencies = {}) {
     repoRoot,
     clock,
     confirm,
+    approvalSigner: dependencies.approvalSigner,
+    approvalVerifier: dependencies.approvalVerifier,
   });
 
   try {
@@ -629,18 +658,18 @@ export async function runCli(argv, dependencies = {}) {
       writeLine(output, PACKAGE_VERSION);
       return 0;
     }
-    const jsonCommands = new Set(["list", "search", "status", "next", "review-experiment", "rebuild-index"]);
+    const jsonCommands = new Set(["list", "search", "export-report", "status", "next", "review-experiment", "rebuild-index", "sync"]);
     if (options.json && !jsonCommands.has(command)) {
       throw new GenesisError("JSON_OUTPUT_UNSUPPORTED", "JSON output is limited to read-only and rebuild commands", {
         path: "/options/json",
-        correction: "Use --json with list, search, status, next, review-experiment, or rebuild-index",
+        correction: "Use --json with list, search, export-report, status, next, review-experiment, or rebuild-index",
         escalation: "operator",
       });
     }
     const structuredInput = options.inputPath
       ? readStructuredInput(projectRoot, options.inputPath)
       : null;
-    const inputUnsupportedCommands = new Set(["list", "search", "status", "review-experiment", "rebuild-index"]);
+    const inputUnsupportedCommands = new Set(["identity", "verify-workspace", "sync", "list", "search", "export-report", "status", "review-experiment", "rebuild-index"]);
     if (structuredInput && inputUnsupportedCommands.has(command)) {
       throw new GenesisError("INPUT_FILE_UNSUPPORTED", "This command does not accept proposal input", {
         path: "/options/input",
@@ -661,6 +690,93 @@ export async function runCli(argv, dependencies = {}) {
         correction: "Use list filters with genesis list and evidence filters with genesis search",
         escalation: "operator",
       });
+    }
+
+    if (command === "identity") {
+      const subcommand = businessId;
+      if (options.json || !["setup", "status", "revoke"].includes(subcommand)) {
+        usage(output);
+        return 2;
+      }
+      if (subcommand === "status") {
+        writeLine(output, renderIdentityStatus(await service.identityStatus()));
+        return 0;
+      }
+      const keyPath = await signingKeyPath(options, null, prompter);
+      const fingerprint = publicKeyFingerprint(publicKeyFromPrivateKey(keyPath));
+      if (subcommand === "setup") {
+        writeLine(output, [
+          "Set up Human Authority",
+          "Principal: genesis-owner",
+          `SSH key fingerprint: ${fingerprint}`,
+          "This is the trust-on-first-use anchor for future approval signatures.",
+        ].join("\n"));
+        if (!(await prompter.confirm("Use this physical key for Human Authority? [y/N] "))) {
+          writeLine(output, "Cancelled. Nothing was changed.");
+          return 0;
+        }
+        const result = await service.setupIdentity({ signing_key_path: keyPath });
+        writeLine(output, `Human Authority identity verified and saved.\nFingerprint: ${result.fingerprint}`);
+        return 0;
+      }
+      const reason = await askRequired(prompter, "Why must this key be revoked? ");
+      writeLine(output, `Revoke Human Authority key\nFingerprint: ${fingerprint}\nReason: ${reason}`);
+      if (!(await prompter.confirm("Revoke this key and block new approvals? [y/N] "))) {
+        writeLine(output, "Cancelled. Nothing was changed.");
+        return 0;
+      }
+      await service.revokeIdentity({ signing_key_path: keyPath, reason });
+      writeLine(output, "Human Authority key revoked. New approvals are blocked until authorized recovery.");
+      return 0;
+    }
+
+    if (command === "verify-workspace") {
+      writeLine(output, renderWorkspaceVerification(await service.verifyWorkspace()));
+      return 0;
+    }
+
+    if (command === "sync") {
+      const subcommand = businessId;
+      if (!["status", "prepare", "apply"].includes(subcommand) || (options.json && subcommand !== "status")) {
+        usage(output);
+        return 2;
+      }
+      const status = await service.syncStatus();
+      if (subcommand === "status") {
+        if (options.json) writeJson(output, status);
+        else writeLine(output, renderSyncStatus(status));
+        return status.conflicts.length > 0 ? 1 : 0;
+      }
+      writeLine(output, renderSyncStatus(status));
+      if (status.conflicts.length > 0) {
+        throw new GenesisError("SYNC_CONFLICT", "Sync contains divergent immutable versions", {
+          path: status.conflicts[0].logical_path,
+          correction: "Preserve both events and request a separate Human Authority reconciliation decision; Genesis will not select a winner",
+          escalation: "human_authority",
+        });
+      }
+      if (subcommand === "prepare") {
+        if (status.missing_events === 0) {
+          writeLine(output, "Everything is already prepared for Git.");
+          return 0;
+        }
+        if (!(await prompter.confirm(`Create ${status.missing_events} immutable sync event(s)? [y/N] `))) {
+          writeLine(output, "Cancelled. Nothing was changed.");
+          return 0;
+        }
+        writeLine(output, renderSyncPrepared(await service.prepareSync()));
+        return 0;
+      }
+      if (status.pending_resources === 0) {
+        writeLine(output, "No incoming resources need to be applied.");
+        return 0;
+      }
+      if (!(await prompter.confirm(`Validate and apply ${status.pending_resources} incoming resource(s)? [y/N] `))) {
+        writeLine(output, "Cancelled. Nothing was changed.");
+        return 0;
+      }
+      writeLine(output, renderSyncApplied(await service.applySync()));
+      return 0;
     }
 
     if (command === "start-business") {
@@ -767,6 +883,17 @@ export async function runCli(argv, dependencies = {}) {
       return 0;
     }
 
+    if (command === "export-report") {
+      if (!businessId) {
+        usage(output);
+        return 2;
+      }
+      const report = await service.exportReport(businessId);
+      if (options.json) writeJson(output, report);
+      else writeLine(output, renderBusinessReport(report));
+      return 0;
+    }
+
     if (command === "next") {
       if (!businessId) {
         usage(output);
@@ -810,6 +937,7 @@ export async function runCli(argv, dependencies = {}) {
           approver_principal_id: "genesis-owner",
           rationale,
           guided: true,
+          signing_key_path: await signingKeyPath(options, structuredInput, prompter),
         };
         const result = decision === "approved"
           ? await service.approveExperiment(businessId, inputData)
@@ -854,9 +982,11 @@ export async function runCli(argv, dependencies = {}) {
       }
 
       if (guidance.action === "decide_experiment") {
+        const inputData = structuredInput ?? await gatherOutcomeDecisionInput(prompter, guidance);
+        inputData.signing_key_path = await signingKeyPath(options, structuredInput, prompter);
         const result = await service.decideExperiment(
           businessId,
-          structuredInput ?? await gatherOutcomeDecisionInput(prompter, guidance),
+          inputData,
         );
         writeMutationResult(result, output, errorOutput);
         return 0;
@@ -950,6 +1080,7 @@ export async function runCli(argv, dependencies = {}) {
       writeLine(output, renderApprovalReview(review));
       const decision = command === "approve-experiment" ? "approved" : "denied";
       const inputData = structuredInput ?? await gatherApprovalDecisionInput(prompter, review.experiment, decision);
+      inputData.signing_key_path = await signingKeyPath(options, structuredInput, prompter);
       const result = decision === "approved"
         ? await service.approveExperiment(businessId, inputData)
         : await service.denyExperiment(businessId, inputData);
@@ -1009,7 +1140,9 @@ export async function runCli(argv, dependencies = {}) {
       if (command === "record-reflection") {
         result = await service.recordReflection(businessId, structuredInput ?? await gatherReflectionInput(prompter, guidance));
       } else if (command === "decide-experiment") {
-        result = await service.decideExperiment(businessId, structuredInput ?? await gatherOutcomeDecisionInput(prompter, guidance));
+        const inputData = structuredInput ?? await gatherOutcomeDecisionInput(prompter, guidance);
+        inputData.signing_key_path = await signingKeyPath(options, structuredInput, prompter);
+        result = await service.decideExperiment(businessId, inputData);
       } else {
         result = await service.closeExperiment(businessId, structuredInput ?? { actor: guidance.defaults.actor });
       }
@@ -1025,6 +1158,7 @@ export async function runCli(argv, dependencies = {}) {
       const review = await service.reviewExperiment(businessId);
       writeLine(output, renderApprovalReview(review));
       const inputData = structuredInput ?? await gatherRevocationInput(prompter);
+      inputData.signing_key_path = await signingKeyPath(options, structuredInput, prompter);
       const result = await service.revokeApproval(businessId, inputData);
       if (!result.changed) {
         writeLine(output, "Cancelled.");

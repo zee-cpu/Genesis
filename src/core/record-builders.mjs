@@ -4,7 +4,7 @@ import { GenesisError } from "./errors.mjs";
 import { normalizeBusinessId } from "./ids.mjs";
 import { createSchemaRegistry } from "./schema-registry.mjs";
 
-const POLICY_VERSION = "2.0.0";
+const POLICY_VERSION = "2.0.1";
 const SCHEMA_VERSION = "1.0.0";
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const registry = createSchemaRegistry(REPO_ROOT);
@@ -346,8 +346,9 @@ export function buildApprovalRecord(input, clock, options = {}) {
 
 export function versionApprovalRecord(previous, changes, historyRef, clock, options = {}) {
   const activeRegistry = resolveRegistry(options);
+  const { signature: _previousSignature, ...unsignedPrevious } = previous;
   const approval = {
-    ...previous,
+    ...unsignedPrevious,
     ...changes,
     id: previous.id,
     record_type: "approval_record",

@@ -1,7 +1,11 @@
 node_modules/
 npm-debug.log*
 *.tmp
-.genesis/
+.genesis/*
+!.genesis/sync/
+.genesis/sync/*
+!.genesis/sync/events/
+!.genesis/sync/events/*.yaml
 coverage/
 artifacts/
 *.tgz

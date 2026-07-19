@@ -31,14 +31,32 @@ function run(command, args, options = {}) {
   return result.stdout ?? "";
 }
 
+function runToFile(command, args, outputPath, options = {}) {
+  const outputHandle = fs.openSync(outputPath, "w", 0o600);
+  let result;
+  try {
+    result = spawnSync(command, args, {
+      cwd: options.cwd ?? repoRoot,
+      encoding: "utf8",
+      stdio: ["ignore", outputHandle, "pipe"],
+    });
+  } finally {
+    fs.closeSync(outputHandle);
+  }
+  if (result.status !== 0) {
+    throw new Error(`${command} ${args.join(" ")} failed with exit code ${result.status}\n${result.stderr ?? ""}`);
+  }
+  return fs.readFileSync(outputPath, "utf8");
+}
+
 try {
-  const packOutput = run("npm", [
+  const packOutput = runToFile("npm", [
     "pack",
     "--json",
     "--ignore-scripts",
     "--pack-destination",
     outputDirectory,
-  ], { capture: true });
+  ], path.join(temporaryRoot, "npm-pack-report.json"));
   const packed = JSON.parse(packOutput).at(-1);
   assert.ok(packed?.filename, "npm pack did not report a tarball");
   const filePaths = packed.files.map((file) => file.path);
@@ -48,6 +66,7 @@ try {
     "NOTICE",
     "genesis.yaml",
     "src/cli/run-cli.mjs",
+    "src/sync/sync-store.mjs",
     "schemas/genesis.schema.json",
     "templates/decision-record.yaml",
   ]) {
@@ -76,6 +95,7 @@ try {
   assert.match(help, /genesis start-business/);
   assert.match(help, /genesis next <business-id>/);
   assert.match(help, /genesis search <query>/);
+  assert.match(help, /genesis sync status/);
   const installedVersion = run("node", [
     path.join(installDirectory, "node_modules", "genesis-governance", "bin", "genesis.mjs"),
     "--version",

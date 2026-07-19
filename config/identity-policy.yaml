@@ -1,0 +1,28 @@
+id: identity_policy
+policy_version: 2.0.1
+human_authority:
+  principal_id: genesis-owner
+  role: human_authority
+  signature_required: true
+identity_events:
+  storage: append_only_versioned_yaml
+  bootstrap: trust_on_first_use
+  bootstrap_requires_key_possession: true
+  revocation_requires_active_key_signature: true
+  overwrite_forbidden: true
+approval_signatures:
+  scheme: sshsig
+  namespace: genesis-approval-v1
+  canonicalization: RFC8785
+  digest_algorithm: sha256
+  private_key_storage_forbidden: true
+enforcement:
+  unsigned_legacy_records_readable: true
+  unsigned_legacy_records_can_authorize: false
+  invalid_signature_fails_closed: true
+  revoked_key_fails_closed: true
+  missing_identity_fails_closed: true
+limitations:
+  - bootstrap_identity_requires_out_of_band_fingerprint_review
+  - local_signatures_detect_tampering_but_do_not_prevent_file_deletion
+  - signed_local_timestamps_are_not_trusted_timestamp_authority_proofs

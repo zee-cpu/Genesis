@@ -1,5 +1,5 @@
 id: risk_policy
-policy_version: 2.0.0
+policy_version: 2.0.1
 levels:
   - { id: low, protected_action: false, required_approver: role_permission }
   - { id: medium, protected_action: false, required_approver: ceo }

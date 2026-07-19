@@ -40,12 +40,14 @@
     "approval_semantics": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["explicit_record_required", "inferred_approval_forbidden", "silence_is_not_approval", "approver_principal_id"],
+      "required": ["explicit_record_required", "inferred_approval_forbidden", "silence_is_not_approval", "approver_principal_id", "cryptographic_signature_required", "unsigned_legacy_authority_forbidden"],
       "properties": {
         "explicit_record_required": { "const": true },
         "inferred_approval_forbidden": { "const": true },
         "silence_is_not_approval": { "const": true },
-        "approver_principal_id": { "const": "genesis-owner" }
+        "approver_principal_id": { "const": "genesis-owner" },
+        "cryptographic_signature_required": { "const": true },
+        "unsigned_legacy_authority_forbidden": { "const": true }
       }
     },
     "precedence": {

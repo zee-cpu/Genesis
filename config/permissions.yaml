@@ -1,5 +1,5 @@
 id: permissions
-policy_version: 2.0.0
+policy_version: 2.0.1
 default_deny: true
 permission_requirements:
   - valid_effective_policy
@@ -8,6 +8,7 @@ permission_requirements:
   - valid_required_approvals
   - no_applicable_suspension_or_revocation
   - required_evidence_and_records
+  - verified_cryptographic_identity_and_signature
 low_risk_permissions:
   - id: public_source_research
     description: Research public sources without collecting sensitive data.
@@ -89,13 +90,19 @@ approval_validity:
     - effective_time
     - expiry
     - revocation
+    - signature
+    - identity_key_status
   deny_if:
     - missing
     - expired
     - revoked
     - mismatched
     - ambiguous
+    - unsigned
+    - invalid_signature
+    - revoked_identity_key
 human_approval:
   principal_id: genesis-owner
   explicit_record_required: true
   inference_forbidden: true
+  verified_key_required: true

@@ -13,9 +13,9 @@ import {
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
-test("normative manifest loads and identifies version 2.0.0", async () => {
+test("normative manifest loads and identifies version 2.0.1", async () => {
   const policySet = await loadPolicySet(ROOT);
-  assert.equal(policySet.manifest.version, "2.0.0");
+  assert.equal(policySet.manifest.version, "2.0.1");
   assert.equal(policySet.manifest.authority, "normative");
 });
 
@@ -38,7 +38,7 @@ for (const {
 } of [
   {
     collection: "policies",
-    duplicateIndex: 10,
+    duplicateIndex: 11,
     replacement: {
       path: "config/duplicate-governance.yaml",
       schema: "schemas/duplicate-governance.schema.json",
@@ -76,7 +76,7 @@ for (const {
   });
 }
 
-test("every registered document is explanatory and matches policy version 2.0.0", async () => {
+test("every registered document is explanatory and matches policy version 2.0.1", async () => {
   const policySet = await loadPolicySet(ROOT);
   assert.deepEqual([...policySet.documents.keys()], [
     "constitution",
@@ -84,7 +84,7 @@ test("every registered document is explanatory and matches policy version 2.0.0"
     "agent_instructions",
   ]);
   for (const [documentId, content] of policySet.documents.entries()) {
-    assert.match(content, /^Policy-Version: 2\.0\.0$/m, documentId);
+    assert.match(content, /^Policy-Version: 2\.0\.1$/m, documentId);
     assert.match(content, /^Authority: Explanatory$/m, documentId);
   }
   assert.deepEqual(
@@ -126,7 +126,7 @@ test("legacy codex instructions are only a deprecation notice", async () => {
   assert.equal(content.trim(), [
     "# Deprecated Agent Instructions",
     "",
-    "Policy-Version: 2.0.0",
+    "Policy-Version: 2.0.1",
     "Authority: Explanatory",
     "",
     "This file is inactive. Repository agent instructions are defined in [AGENTS.md](AGENTS.md). Normative policy is defined by [genesis.yaml](genesis.yaml) and its referenced YAML files.",
@@ -136,10 +136,10 @@ test("legacy codex instructions are only a deprecation notice", async () => {
 test("documentation validation rejects version, authority, and agent conflicts", async () => {
   const policySet = await loadPolicySet(ROOT);
   policySet.documents.set("constitution", policySet.documents.get("constitution")
-    .replace("Policy-Version: 2.0.0", "Policy-Version: 1.0.0"));
+    .replace("Policy-Version: 2.0.1", "Policy-Version: 1.0.0"));
   policySet.documents.set("configuration_guide", policySet.documents.get("configuration_guide")
     .replace("Authority: Explanatory", "Authority: Normative"));
-  policySet.documents.set("agent_instructions", "Policy-Version: 2.0.0\nAuthority: Explanatory\nApproval may be inferred.\n");
+  policySet.documents.set("agent_instructions", "Policy-Version: 2.0.1\nAuthority: Explanatory\nApproval may be inferred.\n");
   const codes = validateInvariants(policySet).map((issue) => issue.code);
   assert.equal(codes.includes("DOC_VERSION_MISMATCH"), true);
   assert.equal(codes.includes("DOC_AUTHORITY_CONFLICT"), true);
@@ -192,7 +192,7 @@ test("release-candidate packaging is allowlisted, versioned, and non-publishing"
   assert.equal(packageJson.license, "Apache-2.0");
   assert.equal(packageJson.repository.url, "git+https://github.com/zee-cpu/Genesis.git");
   assert.equal(packageJson.scripts["release:verify"], "node scripts/verify-package.mjs");
-  for (const required of ["bin/", "src/cli/", "config/", "schemas/", "templates/", "genesis.yaml", "LICENSE", "NOTICE"]) {
+  for (const required of ["bin/", "src/cli/", "src/security/", "src/sync/", "config/", "schemas/", "templates/", "genesis.yaml", "LICENSE", "NOTICE"]) {
     assert.equal(packageJson.files.includes(required), true, required);
   }
   for (const forbidden of ["site/", "src/experiments/", "records/", "tests/"]) {
@@ -243,6 +243,9 @@ test("README documents the offline CLI, files, recovery, and limits", async () =
     "genesis record-reflection <business-id>",
     "genesis decide-experiment <business-id>",
     "genesis close-experiment <business-id>",
+    "genesis sync status",
+    "genesis sync prepare",
+    "genesis sync apply",
     "genesis revoke-approval <business-id>",
     "genesis rebuild-index",
   ]) {

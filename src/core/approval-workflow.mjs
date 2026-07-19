@@ -42,7 +42,7 @@ function blocker(code, message, path, correction) {
   return { code, message, path, correction, escalation: "human_authority" };
 }
 
-export function evaluateExperimentApproval({ approval, experiment, actor, now }) {
+export function evaluateExperimentApproval({ approval, experiment, actor, now, signatureValidity }) {
   const blockers = [];
   if (!approval) {
     return {
@@ -58,6 +58,16 @@ export function evaluateExperimentApproval({ approval, experiment, actor, now })
   }
   if (approval.approver_role !== "human_authority" || approval.approver_principal_id !== "genesis-owner") {
     blockers.push(blocker("APPROVAL_APPROVER_INVALID", "Approval was not issued by Genesis Human Authority", "/approver_principal_id", "Use genesis-owner as Human Authority"));
+  }
+  if (signatureValidity && !signatureValidity.valid) {
+    blockers.push(blocker(
+      signatureValidity.code ?? "APPROVAL_SIGNATURE_INVALID",
+      signatureValidity.message ?? "Human Authority signature is invalid",
+      "/signature",
+      signatureValidity.legacy
+        ? "Issue a new approval with the registered Human Authority SSH key"
+        : "Verify the Human Authority identity and approval signature",
+    ));
   }
   if (approval.requester === approval.approver_principal_id) {
     blockers.push(blocker("SEPARATION_OF_DUTIES_REQUIRED", "Approval requester and approver are not separated", "/requester", "Use a requester distinct from genesis-owner"));
@@ -97,7 +107,7 @@ export function requireExperimentApproval(input) {
   return input.approval;
 }
 
-export function evaluateOutcomeApproval({ approval, experiment, experience, decision, actor, outcome, now }) {
+export function evaluateOutcomeApproval({ approval, experiment, experience, decision, actor, outcome, now, signatureValidity }) {
   const blockers = [];
   if (!approval) {
     return {
@@ -113,6 +123,16 @@ export function evaluateOutcomeApproval({ approval, experiment, experience, deci
   }
   if (approval.approver_role !== "human_authority" || approval.approver_principal_id !== "genesis-owner") {
     blockers.push(blocker("APPROVAL_APPROVER_INVALID", "Outcome was not approved by Genesis Human Authority", "/approver_principal_id", "Use genesis-owner as Human Authority"));
+  }
+  if (signatureValidity && !signatureValidity.valid) {
+    blockers.push(blocker(
+      signatureValidity.code ?? "APPROVAL_SIGNATURE_INVALID",
+      signatureValidity.message ?? "Human Authority signature is invalid",
+      "/signature",
+      signatureValidity.legacy
+        ? "Issue a new approval with the registered Human Authority SSH key"
+        : "Verify the Human Authority identity and approval signature",
+    ));
   }
   if (approval.requester === approval.approver_principal_id) {
     blockers.push(blocker("SEPARATION_OF_DUTIES_REQUIRED", "Outcome requester and approver are not separated", "/requester", "Use a requester distinct from genesis-owner"));

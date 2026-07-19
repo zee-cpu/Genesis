@@ -9,7 +9,7 @@
     "policy_version": { "$ref": "#/$defs/semver" },
     "default_deny": { "const": true },
     "permission_requirements": {
-      "const": ["valid_effective_policy", "authorized_role_and_permission", "unexpired_budget_duration_data_and_risk_envelope", "valid_required_approvals", "no_applicable_suspension_or_revocation", "required_evidence_and_records"]
+      "const": ["valid_effective_policy", "authorized_role_and_permission", "unexpired_budget_duration_data_and_risk_envelope", "valid_required_approvals", "no_applicable_suspension_or_revocation", "required_evidence_and_records", "verified_cryptographic_identity_and_signature"]
     },
     "low_risk_permissions": {
       "type": "array",
@@ -29,18 +29,19 @@
       "additionalProperties": false,
       "required": ["required_checks", "deny_if"],
       "properties": {
-        "required_checks": { "const": ["scope", "actor", "budget", "duration", "data_class", "risk_class", "effective_time", "expiry", "revocation"] },
-        "deny_if": { "const": ["missing", "expired", "revoked", "mismatched", "ambiguous"] }
+        "required_checks": { "const": ["scope", "actor", "budget", "duration", "data_class", "risk_class", "effective_time", "expiry", "revocation", "signature", "identity_key_status"] },
+        "deny_if": { "const": ["missing", "expired", "revoked", "mismatched", "ambiguous", "unsigned", "invalid_signature", "revoked_identity_key"] }
       }
     },
     "human_approval": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["principal_id", "explicit_record_required", "inference_forbidden"],
+      "required": ["principal_id", "explicit_record_required", "inference_forbidden", "verified_key_required"],
       "properties": {
         "principal_id": { "const": "genesis-owner" },
         "explicit_record_required": { "const": true },
-        "inference_forbidden": { "const": true }
+        "inference_forbidden": { "const": true },
+        "verified_key_required": { "const": true }
       }
     }
   },

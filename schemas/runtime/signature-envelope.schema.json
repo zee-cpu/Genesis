@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genesis.local/schemas/runtime/signature-envelope.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scheme", "namespace", "canonicalization", "digest_algorithm", "payload_digest", "principal_id", "key_fingerprint", "signed_at", "signature"],
+  "properties": {
+    "scheme": { "const": "sshsig" },
+    "namespace": { "enum": ["genesis-approval-v1", "genesis-identity-v1"] },
+    "canonicalization": { "const": "RFC8785" },
+    "digest_algorithm": { "const": "sha256" },
+    "payload_digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "principal_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "key_fingerprint": { "type": "string", "pattern": "^SHA256:[A-Za-z0-9+/]+$" },
+    "signed_at": { "type": "string", "format": "date-time" },
+    "signature": { "type": "string", "pattern": "^-----BEGIN SSH SIGNATURE-----[\\s\\S]+-----END SSH SIGNATURE-----$" }
+  }
+}

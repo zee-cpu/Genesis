@@ -7,9 +7,12 @@ import { evaluateDiscoverGate, buildStatus } from "../core/discovery-workflow.mj
 import { GenesisError } from "../core/errors.mjs";
 import { normalizeBusinessId } from "../core/ids.mjs";
 import { createSchemaRegistry } from "../core/schema-registry.mjs";
+import { signApprovalRecord, verifyApprovalRecord } from "../security/approval-signatures.mjs";
+import { bootstrapHumanAuthority, inspectHumanAuthorityIdentity, revokeHumanAuthorityKey } from "../security/identity-store.mjs";
 import { listRecords, readRecord, writeRecords } from "../storage/yaml-record-store.mjs";
 import { openProjection, projectRecord, projectionConsistency, readOpportunities, readOpportunity, recordBlockedCommand, rebuildProjection } from "../storage/projection.mjs";
 import { withWorkspaceLock, workspacePaths } from "../storage/workspace.mjs";
+import { applySync, prepareSync, syncStatus } from "../sync/sync-store.mjs";
 
 const DEFAULT_CONFIRM = async () => true;
 const DEFAULT_CLOCK = () => new Date();
@@ -131,7 +134,7 @@ function evidenceIds(evidenceEntries) {
   return evidenceEntries.map(({ record }) => record.id).filter(Boolean);
 }
 
-function currentStatus({ projectRoot, businessId, now }) {
+function currentStatus({ projectRoot, businessId, now, registry, approvalVerifier = verifyApprovalRecord }) {
   const normalized = normalizeBusinessId(businessId);
   const { entries, approvalEntries, decisionEntries, experimentEntries, experienceEntries, evidenceEntries } = businessEntries(projectRoot, normalized);
   ensureBusinessExists(decisionEntries, normalized);
@@ -168,8 +171,11 @@ function currentStatus({ projectRoot, businessId, now }) {
   let state = status.state;
   let nextCommand = status.next_command;
   let approvalValidity = null;
+  let approvalSignatureValidity = null;
   if (latestApproval) {
     const approval = latestApproval.record;
+    const signatureValidity = approvalVerifier({ projectRoot, registry, record: approval });
+    approvalSignatureValidity = signatureValidity;
     approvalValidity = ["outcome_approved", "closed"].includes(latestExperiment?.record.status)
       ? evaluateOutcomeApproval({
           approval,
@@ -179,12 +185,14 @@ function currentStatus({ projectRoot, businessId, now }) {
           actor: approval.actor,
           outcome: latestExperiment?.record.decision_outcome,
           now,
+          signatureValidity,
         })
       : evaluateExperimentApproval({
           approval,
           experiment: latestExperiment?.record,
           actor: approval.actor,
           now,
+          signatureValidity,
         });
     if (
       (approval.revoked || approval.status === "revoked")
@@ -226,6 +234,7 @@ function currentStatus({ projectRoot, businessId, now }) {
     experience_versions: experienceEntries.length,
     approval: latestApproval?.record ?? null,
     approval_validity: approvalValidity,
+    approval_signature_validity: approvalSignatureValidity,
     limits: latestRecord(experimentEntries)?.limits ?? null,
     ...status,
     state,
@@ -311,7 +320,7 @@ function nextCommandForGuidance(guidance) {
   return commands[guidance.action] ?? guidance.status.next_command ?? "status";
 }
 
-function listOpportunities({ projectRoot, clock, filters = {} }) {
+function listOpportunities({ projectRoot, clock, filters = {}, registry, approvalVerifier }) {
   const paths = workspacePaths(projectRoot);
   if (!fs.existsSync(paths.db)) {
     throw new GenesisError("PROJECTION_STALE", "SQLite projection is unavailable", {
@@ -340,7 +349,7 @@ function listOpportunities({ projectRoot, clock, filters = {} }) {
 
   const now = clock().toISOString();
   const opportunities = rows.map((row) => {
-    const guidance = guidedNextStep({ projectRoot, businessId: row.business_id, clock });
+    const guidance = guidedNextStep({ projectRoot, businessId: row.business_id, clock, registry, approvalVerifier });
     const timing = reviewTiming({
       decision: guidance.decision,
       approval: guidance.approval,
@@ -454,7 +463,105 @@ function searchEvidence({ projectRoot, query, filters = {} }) {
   };
 }
 
-function guidedNextStep({ projectRoot, businessId, clock }) {
+function exportBusinessReport({ projectRoot, businessId, clock, registry, approvalVerifier }) {
+  const normalized = normalizeBusinessId(businessId);
+  const now = clock().toISOString();
+  const status = currentStatus({ projectRoot, businessId: normalized, now, registry, approvalVerifier });
+  if (!status.projection_consistent) {
+    throw new GenesisError("PROJECTION_STALE", "Canonical records and SQLite projection differ", {
+      path: "/projection",
+      correction: "Run genesis rebuild-index before exporting a report",
+      escalation: "operator",
+    });
+  }
+
+  const {
+    decisionEntries,
+    approvalEntries,
+    experimentEntries,
+    experienceEntries,
+    evidenceEntries,
+  } = businessEntries(projectRoot, normalized);
+
+  const reportEntry = (entry) => entry ? {
+    version: entry.descriptor.version,
+    path: entry.descriptor.relativePath,
+    record: entry.record,
+  } : null;
+  const evidence = [...evidenceEntries]
+    .sort((left, right) => (
+      String(left.record.collected_at ?? left.record.created_at).localeCompare(String(right.record.collected_at ?? right.record.created_at))
+      || left.record.id.localeCompare(right.record.id)
+    ))
+    .map(reportEntry);
+  const allRecords = [
+    ...decisionEntries,
+    ...approvalEntries,
+    ...experimentEntries,
+    ...experienceEntries,
+    ...evidenceEntries,
+  ];
+
+  return {
+    report_version: "1.0.0",
+    generated_at: now,
+    business_id: normalized,
+    lifecycle: {
+      state: status.state,
+      next_command: status.next_command,
+      projection_consistent: status.projection_consistent,
+      discover_gate_passed: status.discover_gate?.passed ?? false,
+      approval_valid: status.approval_validity?.valid ?? null,
+      metrics: status.metrics,
+    },
+    records: {
+      decision: reportEntry(latestByVersion(decisionEntries)),
+      evidence,
+      experiment: reportEntry(latestByVersion(experimentEntries)),
+      approval: reportEntry(latestByVersion(approvalEntries)),
+      experience: reportEntry(latestByVersion(experienceEntries)),
+    },
+    audit: {
+      record_count: allRecords.length,
+      decision_versions: decisionEntries.length,
+      evidence_count: evidenceEntries.length,
+      experiment_versions: experimentEntries.length,
+      approval_versions: approvalEntries.length,
+      experience_versions: experienceEntries.length,
+      privacy_classifications: unique(allRecords.map(({ record }) => record.privacy_classification)).sort(),
+      source_paths: allRecords.map(({ descriptor }) => descriptor.relativePath).sort(),
+    },
+  };
+}
+
+function verifyWorkspaceSecurity({ projectRoot, registry, approvalVerifier }) {
+  const identity = inspectHumanAuthorityIdentity(projectRoot, registry);
+  const approvals = listRecords(projectRoot)
+    .filter((descriptor) => descriptor.kind === "approval")
+    .map((descriptor) => {
+      const record = readRecord(descriptor.absolutePath);
+      const verification = approvalVerifier({ projectRoot, registry, record });
+      return {
+        id: record.id,
+        version: descriptor.version,
+        path: descriptor.relativePath,
+        signed: Boolean(record.signature),
+        ...verification,
+      };
+    });
+  return {
+    identity,
+    approvals,
+    summary: {
+      signed_valid: approvals.filter((item) => item.signed && item.valid).length,
+      unsigned_legacy: approvals.filter((item) => !item.signed).length,
+      invalid: approvals.filter((item) => item.signed && !item.valid).length,
+    },
+    authorizing_ready: identity.valid && approvals.every((item) => !item.signed || item.valid),
+  };
+}
+
+function guidedNextStep({ projectRoot, businessId, clock, registry, approvalVerifier }) {
   const normalized = normalizeBusinessId(businessId);
   const paths = workspacePaths(projectRoot);
   if (!fs.existsSync(paths.db)) {
@@ -481,7 +588,7 @@ function guidedNextStep({ projectRoot, businessId, clock }) {
   }
 
   const now = clock().toISOString();
-  const status = currentStatus({ projectRoot, businessId: normalized, now });
+  const status = currentStatus({ projectRoot, businessId: normalized, now, registry, approvalVerifier });
   if (!status.projection_consistent) {
     throw new GenesisError("PROJECTION_STALE", "Canonical records and SQLite projection differ", {
       path: "/projection",
@@ -1339,7 +1446,7 @@ function approvalRecordProposal(projectRoot, businessId, input, decision, clock,
   };
 }
 
-function startExperimentProposal(projectRoot, businessId, input, clock, registry) {
+function startExperimentProposal(projectRoot, businessId, input, clock, registry, approvalVerifier) {
   const normalized = normalizeBusinessId(businessId);
   const { entries, decisionEntries, experimentEntries } = businessEntries(projectRoot, normalized);
   ensureBusinessExists(decisionEntries, normalized);
@@ -1358,6 +1465,7 @@ function startExperimentProposal(projectRoot, businessId, input, clock, registry
     experiment: latestExperiment.record,
     actor: input.actor,
     now: clock().toISOString(),
+    signatureValidity: latestApproval ? approvalVerifier({ projectRoot, registry, record: latestApproval.record }) : undefined,
   });
 
   const experiment = versionExperimentRecord(
@@ -1418,7 +1526,7 @@ function requireWithinActualEnvelope(actual, limits) {
   }
 }
 
-function recordExecutionProposal(projectRoot, businessId, input, clock, registry) {
+function recordExecutionProposal(projectRoot, businessId, input, clock, registry, approvalVerifier) {
   const normalized = normalizeBusinessId(businessId);
   const { entries, decisionEntries, experimentEntries } = businessEntries(projectRoot, normalized);
   ensureBusinessExists(decisionEntries, normalized);
@@ -1459,12 +1567,14 @@ function recordExecutionProposal(projectRoot, businessId, input, clock, registry
     experiment,
     actor: input.actor,
     now: startedAt,
+    signatureValidity: latestApproval ? approvalVerifier({ projectRoot, registry, record: latestApproval.record }) : undefined,
   });
   requireExperimentApproval({
     approval: latestApproval?.record,
     experiment,
     actor: input.actor,
     now: completedAt,
+    signatureValidity: latestApproval ? approvalVerifier({ projectRoot, registry, record: latestApproval.record }) : undefined,
   });
 
   const durationDays = (completedMs - startedMs) / 86_400_000;
@@ -1813,7 +1923,7 @@ function decideExperimentProposal(projectRoot, businessId, input, clock, registr
   };
 }
 
-function closeExperimentProposal(projectRoot, businessId, input, clock, registry) {
+function closeExperimentProposal(projectRoot, businessId, input, clock, registry, approvalVerifier) {
   const normalized = normalizeBusinessId(businessId);
   const { entries, decisionEntries, experimentEntries } = businessEntries(projectRoot, normalized);
   ensureBusinessExists(decisionEntries, normalized);
@@ -1838,6 +1948,7 @@ function closeExperimentProposal(projectRoot, businessId, input, clock, registry
     actor: input.actor,
     outcome: latestExperiment.record.decision_outcome,
     now: now.toISOString(),
+    signatureValidity: latestApproval ? approvalVerifier({ projectRoot, registry, record: latestApproval.record }) : undefined,
   });
   const closedExperiment = versionExperimentRecord(
     latestExperiment.record,
@@ -1982,6 +2093,8 @@ export function createGenesisService({
   confirm = DEFAULT_CONFIRM,
   registry,
   projectRecords = projectWrittenRecords,
+  approvalSigner = signApprovalRecord,
+  approvalVerifier = verifyApprovalRecord,
 } = {}) {
   if (!projectRoot) {
     throw new GenesisError("PROJECT_ROOT_REQUIRED", "A project root is required", {
@@ -1993,11 +2106,24 @@ export function createGenesisService({
 
   const activeRegistry = registry ?? createSchemaRegistry(repoRoot ?? path.resolve(import.meta.dirname, "../.."));
 
-  async function runWithProposal(buildProposal, commandName) {
+  async function runWithProposal(buildProposal, commandName, { signingKeyPath } = {}) {
     return withWorkspaceLock(projectRoot, async () => {
       const proposal = await buildProposal();
       if (!(await confirm(proposal))) {
         return proposalCancelled();
+      }
+
+      const approvalItem = proposal.records?.find((item) => item.record?.record_type === "approval_record");
+      if (approvalItem) {
+        const signedApproval = approvalSigner({
+          projectRoot,
+          registry: activeRegistry,
+          record: approvalItem.record,
+          signingKeyPath,
+          clock,
+        });
+        approvalItem.record = signedApproval;
+        if (proposal.record?.id === signedApproval.id) proposal.record = signedApproval;
       }
 
       const persisted = await persistCommand({
@@ -2011,6 +2137,8 @@ export function createGenesisService({
         projectRoot,
         businessId: proposal.business_id,
         now: clock().toISOString(),
+        registry: activeRegistry,
+        approvalVerifier,
       });
 
       const primaryRecord = proposal.record ?? proposal.records.at(-1)?.record ?? null;
@@ -2037,6 +2165,49 @@ export function createGenesisService({
   }
 
   return {
+    async setupIdentity(input) {
+      return withWorkspaceLock(projectRoot, async () => bootstrapHumanAuthority({
+        projectRoot,
+        registry: activeRegistry,
+        signingKeyPath: input.signing_key_path,
+        clock,
+      }));
+    },
+
+    async identityStatus() {
+      return withWorkspaceLock(projectRoot, async () => inspectHumanAuthorityIdentity(projectRoot, activeRegistry));
+    },
+
+    async revokeIdentity(input) {
+      return withWorkspaceLock(projectRoot, async () => revokeHumanAuthorityKey({
+        projectRoot,
+        registry: activeRegistry,
+        signingKeyPath: input.signing_key_path,
+        reason: input.reason,
+        clock,
+      }));
+    },
+
+    async verifyWorkspace() {
+      return withWorkspaceLock(projectRoot, async () => verifyWorkspaceSecurity({
+        projectRoot,
+        registry: activeRegistry,
+        approvalVerifier,
+      }));
+    },
+
+    async syncStatus() {
+      return withWorkspaceLock(projectRoot, async () => syncStatus(projectRoot, activeRegistry));
+    },
+
+    async prepareSync() {
+      return withWorkspaceLock(projectRoot, async () => prepareSync(projectRoot, activeRegistry));
+    },
+
+    async applySync() {
+      return withWorkspaceLock(projectRoot, async () => applySync(projectRoot, activeRegistry, approvalVerifier));
+    },
+
     async startBusiness(input) {
       return runWithProposal(() => {
         const normalized = normalizeBusinessId(input.business_id);
@@ -2098,7 +2269,7 @@ export function createGenesisService({
         const approval = latestApprovalEntry(entries)?.record ?? null;
         return {
           business_id: normalized,
-          state: currentStatus({ projectRoot, businessId: normalized, now: clock().toISOString() }).state,
+          state: currentStatus({ projectRoot, businessId: normalized, now: clock().toISOString(), registry: activeRegistry, approvalVerifier }).state,
           experiment,
           approval,
           approval_history: approvalEntries.map(({ record }) => record),
@@ -2107,6 +2278,7 @@ export function createGenesisService({
             experiment,
             actor: approval?.actor ?? experiment.owner,
             now: clock().toISOString(),
+            signatureValidity: approval ? approvalVerifier({ projectRoot, registry: activeRegistry, record: approval }) : undefined,
           }),
         };
       });
@@ -2116,6 +2288,7 @@ export function createGenesisService({
       return runWithProposal(
         () => approvalRecordProposal(projectRoot, businessId, input, "approved", clock, activeRegistry),
         "approve-experiment",
+        { signingKeyPath: input.signing_key_path },
       );
     },
 
@@ -2123,19 +2296,20 @@ export function createGenesisService({
       return runWithProposal(
         () => approvalRecordProposal(projectRoot, businessId, input, "denied", clock, activeRegistry),
         "deny-experiment",
+        { signingKeyPath: input.signing_key_path },
       );
     },
 
     async startExperiment(businessId, input) {
       return runWithProposal(
-        () => startExperimentProposal(projectRoot, businessId, input, clock, activeRegistry),
+        () => startExperimentProposal(projectRoot, businessId, input, clock, activeRegistry, approvalVerifier),
         "start-experiment",
       );
     },
 
     async recordExecution(businessId, input) {
       return runWithProposal(
-        () => recordExecutionProposal(projectRoot, businessId, input, clock, activeRegistry),
+        () => recordExecutionProposal(projectRoot, businessId, input, clock, activeRegistry, approvalVerifier),
         "record-execution",
       );
     },
@@ -2158,12 +2332,13 @@ export function createGenesisService({
       return runWithProposal(
         () => decideExperimentProposal(projectRoot, businessId, input, clock, activeRegistry),
         "decide-experiment",
+        { signingKeyPath: input.signing_key_path },
       );
     },
 
     async closeExperiment(businessId, input) {
       return runWithProposal(
-        () => closeExperimentProposal(projectRoot, businessId, input, clock, activeRegistry),
+        () => closeExperimentProposal(projectRoot, businessId, input, clock, activeRegistry, approvalVerifier),
         "close-experiment",
       );
     },
@@ -2172,6 +2347,7 @@ export function createGenesisService({
       return runWithProposal(
         () => revokeApprovalProposal(projectRoot, businessId, input, clock, activeRegistry),
         "revoke-approval",
+        { signingKeyPath: input.signing_key_path },
       );
     },
 
@@ -2180,6 +2356,8 @@ export function createGenesisService({
         projectRoot,
         businessId,
         clock,
+        registry: activeRegistry,
+        approvalVerifier,
       }));
     },
 
@@ -2188,6 +2366,8 @@ export function createGenesisService({
         projectRoot,
         clock,
         filters,
+        registry: activeRegistry,
+        approvalVerifier,
       }));
     },
 
@@ -2199,11 +2379,23 @@ export function createGenesisService({
       }));
     },
 
+    async exportReport(businessId) {
+      return withWorkspaceLock(projectRoot, async () => exportBusinessReport({
+        projectRoot,
+        businessId,
+        clock,
+        registry: activeRegistry,
+        approvalVerifier,
+      }));
+    },
+
     async status(businessId) {
       return withWorkspaceLock(projectRoot, async () => currentStatus({
         projectRoot,
         businessId,
         now: clock().toISOString(),
+        registry: activeRegistry,
+        approvalVerifier,
       }));
     },
 
